@@ -2,32 +2,32 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Plato Bougas</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#000; overflow-x:hidden; }
-  canvas#gl { position:fixed; top:0; left:0; display:block; z-index:0; }
-  .zone { position:relative; z-index:5; }
+  html, body { background:#000; overflow-x:hidden; width:100%; -webkit-tap-highlight-color:transparent; }
+  canvas#gl { position:fixed; top:0; left:0; width:100vw; height:100dvh; display:block; z-index:0; pointer-events:none; }
+  .zone { position:relative; z-index:5; width:100%; }
 
   .desc-overlay {
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
     text-align:center; pointer-events:none; opacity:0; z-index:8;
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-    width:90%; max-width:640px;
+    width:90%; max-width:640px; transition:opacity 0.25s ease-out;
   }
   .desc-overlay .cap, .desc-overlay .body {
-    font-size:.85rem; color:#666; letter-spacing:.08em; font-weight:400;
+    font-size:.85rem; color:#888; letter-spacing:.08em; font-weight:400; line-height:1.4;
   }
   .desc-overlay .cap { margin-bottom:.4rem; }
 
   .contact-zone {
-    position:relative; z-index:10; height:100vh;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem;
+    position:relative; z-index:10; height:100vh; height:100dvh;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.2rem;
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   }
-  .contact-zone a { color:#666; text-decoration:none; font-size:.85rem; letter-spacing:.08em; transition:color .3s; }
-  .contact-zone a:hover { color:#fff; }
+  .contact-zone a { color:#666; text-decoration:none; font-size:.85rem; letter-spacing:.08em; transition:color .3s; padding: 6px 12px; }
+  .contact-zone a:hover, .contact-zone a:active { color:#fff; }
 
   #hint {
     position:fixed; bottom:1.8rem; left:50%; transform:translateX(-50%); z-index:20;
@@ -40,10 +40,10 @@
 </head>
 <body>
 
-<div class="zone" id="z0" style="height:220vh;"></div>
-<div class="zone" id="z1" style="height:280vh;"></div>
-<div class="zone" id="z2" style="height:280vh;"></div>
-<div class="zone" id="z3" style="height:280vh;"></div>
+<div class="zone" id="z0" style="height:140vh;"></div>
+<div class="zone" id="z1" style="height:160vh;"></div>
+<div class="zone" id="z2" style="height:160vh;"></div>
+<div class="zone" id="z3" style="height:160vh;"></div>
 
 <div class="desc-overlay" id="ov0">
   <div class="cap">Analyst · Founder · Builder</div>
@@ -78,11 +78,13 @@ function smoothstep(x,e0,e1){ const t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2
 function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
 function computeStep(fontSize, minS, maxS, divisor){ return clamp(fontSize/divisor, minS, maxS); }
 
+const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 640;
+
 // ─── renderer / scene / camera ─────────────────────────────────────
 let W = window.innerWidth, H = window.innerHeight;
-let DPR = Math.min(window.devicePixelRatio||1, 2);
+let DPR = Math.min(window.devicePixelRatio||1, IS_MOBILE ? 1.5 : 2);
 
-const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+const renderer = new THREE.WebGLRenderer({ antialias:!IS_MOBILE, alpha:false });
 renderer.setPixelRatio(DPR);
 renderer.setSize(W,H);
 renderer.domElement.id = 'gl';
@@ -108,7 +110,7 @@ window.addEventListener('mouseleave', () => { mouseX = 999999; mouseY = 999999; 
 window.addEventListener('touchmove', e => { if (e.touches && e.touches[0]) setMouseFromClient(e.touches[0].clientX, e.touches[0].clientY); }, {passive:true});
 window.addEventListener('touchend', () => { mouseX = 999999; mouseY = 999999; }, {passive:true});
 
-const REPEL_RADIUS = 110, REPEL_RADIUS_SQ = REPEL_RADIUS*REPEL_RADIUS, REPEL_STRENGTH = 2.4;
+const REPEL_RADIUS = IS_MOBILE ? 80 : 110, REPEL_RADIUS_SQ = REPEL_RADIUS*REPEL_RADIUS, REPEL_STRENGTH = IS_MOBILE ? 1.8 : 2.4;
 function repel(px, py){
   const dx = px - mouseX, dy = py - mouseY;
   const dSq = dx*dx + dy*dy;
@@ -120,7 +122,7 @@ function repel(px, py){
   return { x:0, y:0 };
 }
 
-// ─── shaders: flat constant-size (headline/description) vs depth-attenuated (stars only) ─
+// ─── shaders ────────────────────────────────────────────────────────
 const FRAG = `
   precision mediump float;
   varying float vAlpha;
@@ -181,17 +183,26 @@ function makePoints(count, group, attenuated){
   return pts;
 }
 
-// ─── text sampling — jittered off the grid so no periodic "gridline" pattern is visible ─
-const HEAD_CAP = 3400, DESC_CAP = 2600;
+// ─── text sampling ──────────────────────────────────────────────────
+const HEAD_CAP = IS_MOBILE ? 2200 : 3400;
+const DESC_CAP = IS_MOBILE ? 1600 : 2600;
 
-function sampleGlyphs(text, fontSize, minStep, maxStep, divisor, threshold, cap) {
-  const CW=1400, CH=340;
+function sampleGlyphs(textLines, fontSize, minStep, maxStep, divisor, threshold, cap) {
+  const CW=1400, CH=440;
   const c=document.createElement('canvas'); c.width=CW; c.height=CH;
   const x=c.getContext('2d');
   x.fillStyle='#fff';
   x.font=`700 ${fontSize}px -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif`;
   x.textAlign='center'; x.textBaseline='middle';
-  x.fillText(text, CW/2, CH/2);
+  
+  const lines = Array.isArray(textLines) ? textLines : [textLines];
+  const lineHeight = fontSize * 1.15;
+  const startY = CH/2 - ((lines.length - 1) * lineHeight)/2;
+  
+  lines.forEach((line, idx) => {
+    x.fillText(line, CW/2, startY + idx*lineHeight);
+  });
+
   const step = computeStep(fontSize, minStep, maxStep, divisor);
   const jitter = step*0.42;
   const d = x.getImageData(0,0,CW,CH).data;
@@ -214,7 +225,7 @@ function sampleGlyphs(text, fontSize, minStep, maxStep, divisor, threshold, cap)
 }
 
 function sampleLines(lines) {
-  const CW=1400, CH=220;
+  const CW=1400, CH=260;
   const c=document.createElement('canvas'); c.width=CW; c.height=CH;
   const x=c.getContext('2d');
   x.fillStyle='#fff'; x.textAlign='center'; x.textBaseline='middle';
@@ -246,34 +257,34 @@ function sampleLines(lines) {
 }
 
 let HEADLINE_TARGETS = [], DESC_TARGETS = [];
-let DESC_OFFSET = 78;
+let DESC_OFFSET = 110;
 
 function buildAllTargets() {
   const small = W < 640;
-  const headShift = small ? 24 : 40;
-  DESC_OFFSET = small ? 50 : 78;
+  const headShift = small ? 20 : 40;
+  DESC_OFFSET = small ? 115 : 100;
 
   HEADLINE_TARGETS = [
-    sampleGlyphs('Plato Bougas',                       small? 66:104, 1.4,3.2,30,80,HEAD_CAP),
-    sampleGlyphs('Google',                              small? 92:140, 1.4,3.2,30,80,HEAD_CAP),
-    sampleGlyphs('Goldman Sachs',                       small? 52:80,  1.4,3.2,30,80,HEAD_CAP),
-    sampleGlyphs('University of Southern California',   small? 28:46,  1.3,3.2,30,80,HEAD_CAP),
+    sampleGlyphs('Plato Bougas', small? 54:104, 1.4,3.2,30,80,HEAD_CAP),
+    sampleGlyphs('Google', small? 78:140, 1.4,3.2,30,80,HEAD_CAP),
+    sampleGlyphs('Goldman Sachs', small? 44:80, 1.4,3.2,30,80,HEAD_CAP),
+    sampleGlyphs(small ? ['University of', 'Southern California'] : 'University of Southern California', small? 32:46, 1.3,3.2,30,80,HEAD_CAP),
   ];
   HEADLINE_TARGETS.forEach(t => t.points.forEach(p => { p.y += headShift; }));
 
   DESC_TARGETS = [
-    sampleLines([{text:'Analyst · Founder · Builder', size: small?22:34, y:110}]),
+    sampleLines([{text:'Analyst · Founder · Builder', size: small?18:34, y:110}]),
     sampleLines([
-      {text:'2022 – Present', size: small?20:34, y:65},
-      {text:'Google Finance Division · AI Platforms & Devices', size: small?14:24, y:120},
+      {text:'2022 – Present', size: small?18:34, y:65},
+      {text:'Google Finance Division · AI Platforms & Devices', size: small?12:24, y:130},
     ]),
     sampleLines([
-      {text:'2021 – 2026', size: small?20:34, y:65},
-      {text:'Equity Derivative Trading · Global Markets Division · Associate', size: small?13:22, y:120},
+      {text:'2021 – 2026', size: small?18:34, y:65},
+      {text:'Equity Derivative Trading · Global Markets Division · Associate', size: small?11:22, y:130},
     ]),
     sampleLines([
-      {text:'2018 – 2021', size: small?20:34, y:65},
-      {text:'Finance · Product Design', size: small?15:26, y:120},
+      {text:'2018 – 2021', size: small?18:34, y:65},
+      {text:'Finance · Product Design', size: small?13:26, y:130},
     ]),
   ];
 
@@ -283,7 +294,7 @@ function buildAllTargets() {
 }
 buildAllTargets();
 
-// ─── background drift (used only for genuinely idle particles — spread out, never clustered) ─
+// ─── background drift ───────────────────────────────────────────────
 function wideHome() {
   let x,y;
   if (Math.random() < 0.7) {
@@ -299,7 +310,8 @@ function wideHome() {
 }
 
 // ─── pools ──────────────────────────────────────────────────────────
-const PUFF_HEAD = 34, PUFF_DESC = 20;
+const PUFF_HEAD = IS_MOBILE ? 24 : 34;
+const PUFF_DESC = IS_MOBILE ? 14 : 20;
 let headPts, descPts;
 let HEAD_POOL, DESC_POOL;
 let hDriftX,hDriftY,hDriftZ,hVelX,hVelY,hPuffX,hPuffY;
@@ -338,7 +350,7 @@ function initPools() {
 initPools();
 
 // ─── ambient starfield ───────────────────────────────────────────────
-const N_STARS = 2000;
+const N_STARS = IS_MOBILE ? 1000 : 2000;
 let starPts;
 const sx=new Float32Array(N_STARS), sy=new Float32Array(N_STARS), sz=new Float32Array(N_STARS);
 const svx=new Float32Array(N_STARS), svy=new Float32Array(N_STARS), svz=new Float32Array(N_STARS);
@@ -359,8 +371,6 @@ initStars();
 
 // ─── scroll + zone progress ────────────────────────────────────────
 let scrollY = 0;
-window.addEventListener('scroll', ()=>{ scrollY = window.scrollY; }, {passive:true});
-
 let zones = [];
 function buildZones(){
   zones = ['z0','z1','z2','z3'].map(id=>{
@@ -368,19 +378,22 @@ function buildZones(){
     return { top: el.offsetTop, h: el.offsetHeight };
   });
 }
+window.addEventListener('scroll', ()=>{ 
+  scrollY = window.scrollY;
+  buildZones(); 
+}, {passive:true});
+
 function zoneProgress(i){
   if (!zones[i]) return 0;
   const {top,h} = zones[i];
   return clamp((scrollY - top)/h, 0, 1);
 }
 
-// headline: direct morph from previous word -> this word (no detour through a rest/cluster state)
-// description: appears, holds, fades — clears out just before the next word's morph begins
-function computeZone(p, isFirst){
-  const formEnd     = isFirst ? 0 : 0.20;
-  const descFormEnd = formEnd + 0.14;
-  const descFadeStart = isFirst ? 0.80 : 0.86;
-  const descFadeEnd   = isFirst ? 0.92 : 0.98;
+function computeZone(p, isFirst, isLast){
+  const formEnd = isFirst ? 0 : 0.15;
+  const descFormEnd = formEnd + 0.10;
+  const descFadeStart = 0.42;
+  const descFadeEnd = 0.58;
 
   const headlineT = p < formEnd ? ease(p/(formEnd||1)) : 1;
 
@@ -391,18 +404,23 @@ function computeZone(p, isFirst){
   else if (p < descFadeEnd) descF = ease(1-(p-descFadeStart)/(descFadeEnd-descFadeStart));
   else descF = 0;
 
-  return { headlineT, descF };
+  let disperseF = 0;
+  if (isLast && p > 0.65) {
+    disperseF = ease((p - 0.65) / 0.35);
+  }
+
+  return { headlineT, descF, disperseF };
 }
 
 function getState(){
   for (let i=0;i<4;i++){
     const p = zoneProgress(i);
     if (p < 1) {
-      const s = computeZone(p, i===0);
-      return { idx:i, prevIdx: i-1, headlineT:s.headlineT, descF:s.descF };
+      const s = computeZone(p, i===0, i===3);
+      return { idx:i, prevIdx: i-1, headlineT:s.headlineT, descF:s.descF, disperseF:s.disperseF };
     }
   }
-  return { idx:3, prevIdx:2, headlineT:1, descF:0 };
+  return { idx:3, prevIdx:2, headlineT:1, descF:0, disperseF:1 };
 }
 
 const hint = document.getElementById('hint');
@@ -417,7 +435,7 @@ function frame(){
   requestAnimationFrame(frame);
   time += 0.006;
 
-  const { idx, prevIdx, headlineT, descF } = getState();
+  const { idx, prevIdx, headlineT, descF, disperseF } = getState();
 
   headGroup.rotation.y = Math.sin(time*0.16) * 0.14;
   headGroup.rotation.x = Math.sin(time*0.11) * 0.03;
@@ -448,7 +466,7 @@ function frame(){
   starPts.geometry.attributes.aSize.needsUpdate = true;
   starPts.geometry.attributes.aAlpha.needsUpdate = true;
 
-  // headline — direct A(prev word) -> B(current word) morph, small outward puff at the midpoint only
+  // headline animation & final dispersion
   const A = prevIdx>=0 ? HEADLINE_TARGETS[prevIdx] : null;
   const B = HEADLINE_TARGETS[idx];
   const aLen = A ? A.points.length : 0;
@@ -463,7 +481,6 @@ function frame(){
     const hasA = A && i < aLen;
     const hasB = i < bLen;
 
-    // idle drift is always alive underneath, so a particle can pick up mid-motion when it's needed
     const rp = repel(hDriftX[i], hDriftY[i]);
     hDriftX[i] += hVelX[i] + rp.x*0.6;
     hDriftY[i] += hVelY[i] + rp.y*0.6;
@@ -472,7 +489,14 @@ function frame(){
     if (hDriftY[i]> H*0.85) hDriftY[i]=-H*0.85;
     if (hDriftY[i]<-H*0.85) hDriftY[i]= H*0.85;
 
-    if (hasA && hasB) {
+    if (disperseF > 0 && hasB) {
+      const tb = B.points[i];
+      hpos[ix]   = lerp(tb.x, hDriftX[i], disperseF) + hPuffX[i]*PUFF_HEAD*disperseF;
+      hpos[ix+1] = lerp(tb.y, hDriftY[i], disperseF) + hPuffY[i]*PUFF_HEAD*disperseF;
+      hpos[ix+2] = lerp(0, hDriftZ[i], disperseF);
+      halpha[i]  = lerp(0.92, 0.14, disperseF);
+      hsize[i]   = lerp(B.dotSize, 1.3, disperseF);
+    } else if (hasA && hasB) {
       const ta=A.points[i], tb=B.points[i];
       hpos[ix]   = lerp(ta.x, tb.x, headlineT) + hPuffX[i]*puffMag;
       hpos[ix+1] = lerp(ta.y, tb.y, headlineT) + hPuffY[i]*puffMag;
@@ -507,11 +531,11 @@ function frame(){
   headPts.geometry.attributes.aSize.needsUpdate = true;
   headPts.geometry.attributes.aAlpha.needsUpdate = true;
 
-  // description — puffs in from drift, holds, puffs back out to drift
+  // description particles
   const descTgt = idx>=0 ? DESC_TARGETS[idx] : null;
   const dLen = descTgt ? descTgt.points.length : 0;
   const dDot = descTgt ? descTgt.dotSize : 1.2;
-  const overlayOpacity = smoothstep(descF, 0.78, 0.95);
+  const overlayOpacity = smoothstep(descF, 0.78, 0.95) * (1 - disperseF);
   const particleFade = 1 - overlayOpacity;
   const dPuffMag = Math.sin(clamp(descF,0,1)*Math.PI) * PUFF_DESC * 0.5;
   const dpos = descPts.geometry.attributes.position.array;
@@ -526,12 +550,12 @@ function frame(){
     if (dDriftY[i]> H*0.7) dDriftY[i]=-H*0.7;
     if (dDriftY[i]<-H*0.7) dDriftY[i]= H*0.7;
 
-    if (descTgt && i < dLen && descF > 0.003) {
+    if (descTgt && i < dLen && descF > 0.003 && disperseF < 1) {
       const t = descTgt.points[i];
       dpos[ix]   = lerp(dDriftX[i], t.x, descF) + dPuffX[i]*dPuffMag;
       dpos[ix+1] = lerp(dDriftY[i], t.y, descF) + dPuffY[i]*dPuffMag;
       dpos[ix+2] = 0;
-      dalpha[i]  = lerp(0.06, 0.9, descF) * particleFade;
+      dalpha[i]  = lerp(0.06, 0.9, descF) * particleFade * (1 - disperseF);
       dsize[i]   = dDot;
     } else {
       dpos[ix]   = dDriftX[i];
@@ -554,7 +578,7 @@ function frame(){
 
 function onResize(){
   W = window.innerWidth; H = window.innerHeight;
-  DPR = Math.min(window.devicePixelRatio||1, 2);
+  DPR = Math.min(window.devicePixelRatio||1, IS_MOBILE ? 1.5 : 2);
   renderer.setPixelRatio(DPR);
   renderer.setSize(W,H);
   camera.left=-W/2; camera.right=W/2; camera.top=H/2; camera.bottom=-H/2;
