@@ -1,603 +1,339 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Plato Bougas</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { background:#000; overflow-x:hidden; width:100%; -webkit-tap-highlight-color:transparent; }
-  canvas#gl { position:fixed; top:0; left:0; width:100vw; height:100dvh; display:block; z-index:0; pointer-events:none; }
-  .zone { position:relative; z-index:5; width:100%; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Plato Bougas</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #050508;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow-x: hidden;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-  .desc-overlay {
-    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-    text-align:center; pointer-events:none; opacity:0; z-index:8;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-    width:90%; max-width:640px; transition:opacity 0.25s ease-out;
-  }
-  .desc-overlay .cap, .desc-overlay .body {
-    font-size:.85rem; color:#888; letter-spacing:.08em; font-weight:400; line-height:1.4;
-  }
-  .desc-overlay .cap { margin-bottom:.4rem; }
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-height: 1;
+      pointer-events: none;
+    }
 
-  .contact-zone {
-    position:relative; z-index:10; height:100vh; height:100dvh;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.2rem;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  }
-  .contact-zone a { color:#666; text-decoration:none; font-size:.85rem; letter-spacing:.08em; transition:color .3s; padding: 6px 12px; }
-  .contact-zone a:hover, .contact-zone a:active { color:#fff; }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
 
-  #hint {
-    position:fixed; bottom:1.8rem; left:50%; transform:translateX(-50%); z-index:20;
-    font-size:.65rem; letter-spacing:.2em; text-transform:uppercase; color:#fff;
-    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-    pointer-events:none; animation:bounce 2.5s ease-in-out infinite; transition:opacity .6s ease;
-  }
-  @keyframes bounce { 0%,100%{transform:translateX(-50%) translateY(0);} 50%{transform:translateX(-50%) translateY(-5px);} }
-</style>
+    .scroll-space {
+      position: relative;
+      height: 450vh; /* Smooth target height */
+      width: 100%;
+      pointer-events: auto;
+      touch-action: pan-y;
+    }
+
+    .links-layer {
+      position: fixed;
+      bottom: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 20px;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+    }
+
+    .links-layer.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .links-layer a {
+      color: #8888aa;
+      text-decoration: none;
+      font-size: 14px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
+
+    .links-layer a:hover {
+      color: #ffffff;
+    }
+  </style>
 </head>
 <body>
 
-<div class="zone" id="z0" style="height:140vh;"></div>
-<div class="zone" id="z1" style="height:160vh;"></div>
-<div class="zone" id="z2" style="height:160vh;"></div>
-<div class="zone" id="z3" style="height:160vh;"></div>
+  <div id="canvas-container">
+    <canvas id="stage"></canvas>
+  </div>
 
-<div class="desc-overlay" id="ov0">
-  <div class="cap">Analyst · Founder · Builder</div>
-</div>
-<div class="desc-overlay" id="ov1">
-  <div class="cap">2022 – Present</div>
-  <div class="body">Google Finance Division · AI Platforms &amp; Devices</div>
-</div>
-<div class="desc-overlay" id="ov2">
-  <div class="cap">2021 – 2026</div>
-  <div class="body">Equity Derivative Trading · Global Markets Division · Associate</div>
-</div>
-<div class="desc-overlay" id="ov3">
-  <div class="cap">2018 – 2021</div>
-  <div class="body">Finance · Product Design</div>
-</div>
+  <div class="scroll-space"></div>
 
-<div class="contact-zone">
-  <a href="mailto:hello@platobougas.com">hello@platobougas.com</a>
-  <a href="#">LinkedIn</a>
-  <a href="#">GitHub</a>
-</div>
+  <div class="links-layer" id="social-links">
+    <a href="mailto:hello@platobougas.com">Email</a>
+    <a href="https://linkedin.com" target="_blank" rel="noopener">LinkedIn</a>
+    <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+  </div>
 
-<div id="hint">scroll</div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // --- Setup Canvas & Engine ---
+    const canvas = document.getElementById('stage');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    
+    // Lock dimensions on load to prevent Chrome URL bar jump glitches
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    renderer.setSize(width, height);
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script>
-const ease = t => t<0.5 ? 2*t*t : -1+(4-2*t)*t;
-const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
-const lerp = (a,b,t) => a + (b-a)*t;
-function smoothstep(x,e0,e1){ const t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); }
-function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
-function computeStep(fontSize, minS, maxS, divisor){ return clamp(fontSize/divisor, minS, maxS); }
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    camera.position.z = 500;
 
-const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 640;
+    // --- Configuration Constants ---
+    const IS_MOBILE = width < 768;
+    // Tightened offset bringing subtitles closer without touching descenders ('g', 'p', etc.)
+    const DESC_OFFSET = IS_MOBILE ? 68 : 75; 
+    const PARTICLE_SIZE = IS_MOBILE ? 1.8 : 2.2;
 
-// ─── renderer / scene / camera ─────────────────────────────────────
-let W = window.innerWidth, H = window.innerHeight;
-let DPR = Math.min(window.devicePixelRatio||1, IS_MOBILE ? 1.5 : 2);
-
-const renderer = new THREE.WebGLRenderer({ antialias:!IS_MOBILE, alpha:false });
-renderer.setPixelRatio(DPR);
-renderer.setSize(W,H);
-renderer.domElement.id = 'gl';
-document.body.appendChild(renderer.domElement);
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
-
-const camera = new THREE.OrthographicCamera(-W/2, W/2, H/2, -H/2, 0.1, 3000);
-camera.position.z = 600;
-camera.lookAt(0,0,0);
-
-const headGroup = new THREE.Group();
-scene.add(headGroup);
-const descGroup = new THREE.Group();
-scene.add(descGroup);
-
-// ─── mouse / touch repulsion ────────────────────────────────────────
-let mouseX = 999999, mouseY = 999999;
-function setMouseFromClient(clientX, clientY){ mouseX = clientX - W/2; mouseY = H/2 - clientY; }
-window.addEventListener('mousemove', e => setMouseFromClient(e.clientX, e.clientY), {passive:true});
-window.addEventListener('mouseleave', () => { mouseX = 999999; mouseY = 999999; }, {passive:true});
-window.addEventListener('touchmove', e => { if (e.touches && e.touches[0]) setMouseFromClient(e.touches[0].clientX, e.touches[0].clientY); }, {passive:true});
-window.addEventListener('touchend', () => { mouseX = 999999; mouseY = 999999; }, {passive:true});
-
-const REPEL_RADIUS = IS_MOBILE ? 80 : 110, REPEL_RADIUS_SQ = REPEL_RADIUS*REPEL_RADIUS, REPEL_STRENGTH = IS_MOBILE ? 1.8 : 2.4;
-function repel(px, py){
-  const dx = px - mouseX, dy = py - mouseY;
-  const dSq = dx*dx + dy*dy;
-  if (dSq < REPEL_RADIUS_SQ && dSq > 0.01) {
-    const d = Math.sqrt(dSq);
-    const force = (1 - d/REPEL_RADIUS) * REPEL_STRENGTH;
-    return { x:(dx/d)*force, y:(dy/d)*force };
-  }
-  return { x:0, y:0 };
-}
-
-// ─── shaders ────────────────────────────────────────────────────────
-const FRAG = `
-  precision mediump float;
-  varying float vAlpha;
-  void main(){
-    vec2 c = gl_PointCoord - vec2(0.5);
-    float d = length(c);
-    if (d > 0.5) discard;
-    float edge = smoothstep(0.5, 0.35, d);
-    gl_FragColor = vec4(1.0, 1.0, 1.0, vAlpha * edge);
-  }
-`;
-const VERT_FLAT = `
-  attribute float aSize;
-  attribute float aAlpha;
-  varying float vAlpha;
-  uniform float uDPR;
-  void main(){
-    vAlpha = aAlpha;
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize * uDPR;
-    gl_Position = projectionMatrix * mvPosition;
-  }
-`;
-const VERT_ATTEN = `
-  attribute float aSize;
-  attribute float aAlpha;
-  varying float vAlpha;
-  uniform float uDPR;
-  void main(){
-    vAlpha = aAlpha;
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize * uDPR * (600.0 / max(1.0, -mvPosition.z));
-    gl_Position = projectionMatrix * mvPosition;
-  }
-`;
-function makeMaterial(attenuated){
-  return new THREE.ShaderMaterial({
-    vertexShader: attenuated ? VERT_ATTEN : VERT_FLAT,
-    fragmentShader: FRAG,
-    uniforms: { uDPR: { value: DPR } },
-    transparent: true, depthWrite: false, depthTest: false,
-    blending: THREE.NormalBlending
-  });
-}
-const allMaterials = [];
-function makePoints(count, group, attenuated){
-  const geo = new THREE.BufferGeometry();
-  const pos = new Float32Array(count*3);
-  const size = new Float32Array(count);
-  const alpha = new Float32Array(count);
-  geo.setAttribute('position', new THREE.BufferAttribute(pos,3).setUsage(THREE.DynamicDrawUsage));
-  geo.setAttribute('aSize', new THREE.BufferAttribute(size,1).setUsage(THREE.DynamicDrawUsage));
-  geo.setAttribute('aAlpha', new THREE.BufferAttribute(alpha,1).setUsage(THREE.DynamicDrawUsage));
-  const mat = makeMaterial(attenuated);
-  allMaterials.push(mat);
-  const pts = new THREE.Points(geo, mat);
-  group.add(pts);
-  return pts;
-}
-
-// ─── text sampling ──────────────────────────────────────────────────
-const HEAD_CAP = IS_MOBILE ? 2200 : 3400;
-const DESC_CAP = IS_MOBILE ? 1600 : 2600;
-
-function sampleGlyphs(textLines, fontSize, minStep, maxStep, divisor, threshold, cap) {
-  const CW=1400, CH=440;
-  const c=document.createElement('canvas'); c.width=CW; c.height=CH;
-  const x=c.getContext('2d');
-  x.fillStyle='#fff';
-  x.font=`700 ${fontSize}px -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif`;
-  x.textAlign='center'; x.textBaseline='middle';
-  
-  const lines = Array.isArray(textLines) ? textLines : [textLines];
-  const lineHeight = fontSize * 1.15;
-  const startY = CH/2 - ((lines.length - 1) * lineHeight)/2;
-  
-  lines.forEach((line, idx) => {
-    x.fillText(line, CW/2, startY + idx*lineHeight);
-  });
-
-  const step = computeStep(fontSize, minStep, maxStep, divisor);
-  const jitter = step*0.42;
-  const d = x.getImageData(0,0,CW,CH).data;
-  const pts=[];
-  for (let row=0; row<CH; row+=step){
-    const r = Math.round(row);
-    for (let col=0; col<CW; col+=step){
-      const c2 = Math.round(col);
-      if (d[(r*CW+c2)*4+3] > threshold) {
-        pts.push({
-          x: c2-CW/2 + (Math.random()-0.5)*jitter,
-          y: CH/2-r + (Math.random()-0.5)*jitter
-        });
+    // --- Text Data Groups ---
+    const SECTIONS = [
+      {
+        title: "Plato Bougas",
+        subtitle: ["Analyst • Founder • Builder"]
+      },
+      {
+        title: "Google",
+        subtitle: ["Hardware Finance & Strategy"]
+      },
+      {
+        title: "USC",
+        subtitle: IS_MOBILE ? ["University of", "Southern California"] : ["University of Southern California"]
+      },
+      {
+        title: "hello@platobougas.com",
+        subtitle: ["Let's build something together."]
       }
-    }
-  }
-  shuffle(pts);
-  if (pts.length > cap) pts.length = cap;
-  return { points:pts, dotSize: Math.max(1.2, step*0.65) };
-}
+    ];
 
-function sampleLines(lines) {
-  const CW=1400, CH=260;
-  const c=document.createElement('canvas'); c.width=CW; c.height=CH;
-  const x=c.getContext('2d');
-  x.fillStyle='#fff'; x.textAlign='center'; x.textBaseline='middle';
-  let minFont=Infinity;
-  lines.forEach(l=>{
-    x.font=`700 ${l.size}px -apple-system, BlinkMacSystemFont, sans-serif`;
-    x.fillText(l.text, CW/2, l.y);
-    minFont = Math.min(minFont, l.size);
-  });
-  const step = computeStep(minFont, 1.6, 3.0, 20);
-  const jitter = step*0.42;
-  const d = x.getImageData(0,0,CW,CH).data;
-  const pts=[];
-  for (let row=0; row<CH; row+=step){
-    const r = Math.round(row);
-    for (let col=0; col<CW; col+=step){
-      const c2 = Math.round(col);
-      if (d[(r*CW+c2)*4+3] > 70) {
-        pts.push({
-          x: c2-CW/2 + (Math.random()-0.5)*jitter,
-          y: CH/2-r + (Math.random()-0.5)*jitter
-        });
+    // --- Glyph Sampling Engine ---
+    function sampleTextPoints(text, fontSize, isBold = false) {
+      const textCanvas = document.createElement('canvas');
+      const ctx = textCanvas.getContext('2d');
+      const scale = 2; // High resolution sampling
+      
+      ctx.font = `${isBold ? '700' : '400'} ${fontSize * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      const metrics = ctx.measureText(text);
+      
+      textCanvas.width = Math.ceil(metrics.width) + 20;
+      textCanvas.height = Math.ceil(fontSize * 1.5 * scale);
+      
+      ctx.font = `${isBold ? '700' : '400'} ${fontSize * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillStyle = '#ffffff';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 10, textCanvas.height / 2);
+
+      const imgData = ctx.getImageData(0, 0, textCanvas.width, textCanvas.height);
+      const points = [];
+      const step = IS_MOBILE ? 3 : 2; // Density control
+
+      for (let y = 0; y < textCanvas.height; y += step) {
+        for (let x = 0; x < textCanvas.width; x += step) {
+          const alpha = imgData.data[(y * textCanvas.width + x) * 4 + 3];
+          if (alpha > 128) {
+            points.push({
+              x: (x - textCanvas.width / 2) / scale,
+              y: -(y - textCanvas.height / 2) / scale
+            });
+          }
+        }
       }
+      return points;
     }
-  }
-  shuffle(pts);
-  if (pts.length > DESC_CAP) pts.length = DESC_CAP;
-  return { points:pts, dotSize: Math.max(1.1, step*0.65) };
-}
 
-let HEADLINE_TARGETS = [], DESC_TARGETS = [];
-let DESC_OFFSET = 110;
+    // --- Particle System Assembly ---
+    const allParticles = [];
+    const geometry = new THREE.BufferGeometry();
+    
+    // Generate particles for each section
+    SECTIONS.forEach((sec, sectionIndex) => {
+      const titleFontSize = IS_MOBILE ? (sec.title.length > 15 ? 26 : 38) : 54;
+      const subFontSize = IS_MOBILE ? 14 : 18;
 
-function buildAllTargets() {
-  const small = W < 640;
-  const headShift = small ? 20 : 40;
-  DESC_OFFSET = small ? 115 : 100;
+      // 1. Title Points
+      const titlePoints = sampleTextPoints(sec.title, titleFontSize, true);
+      titlePoints.forEach(p => {
+        allParticles.push({
+          sec: sectionIndex,
+          type: 'title',
+          baseX: p.x,
+          baseY: p.y,
+          x: p.x,
+          y: p.y + (sectionIndex * -350), // Section vertical offset
+          z: 0,
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: (Math.random() - 0.5) * 1.5,
+          vz: (Math.random() - 0.5) * 1.5
+        });
+      });
 
-  HEADLINE_TARGETS = [
-    sampleGlyphs('Plato Bougas', small? 54:104, 1.4,3.2,30,80,HEAD_CAP),
-    sampleGlyphs('Google', small? 78:140, 1.4,3.2,30,80,HEAD_CAP),
-    sampleGlyphs('Goldman Sachs', small? 44:80, 1.4,3.2,30,80,HEAD_CAP),
-    sampleGlyphs(small ? ['University of', 'Southern California'] : 'University of Southern California', small? 32:46, 1.3,3.2,30,80,HEAD_CAP),
-  ];
-  HEADLINE_TARGETS.forEach(t => t.points.forEach(p => { p.y += headShift; }));
+      // 2. Subtitle Points
+      sec.subtitle.forEach((subLine, lineIdx) => {
+        const subPoints = sampleTextPoints(subLine, subFontSize, false);
+        const lineYOffset = -DESC_OFFSET - (lineIdx * (subFontSize + 8));
 
-  DESC_TARGETS = [
-    sampleLines([{text:'Analyst · Founder · Builder', size: small?18:34, y:110}]),
-    sampleLines([
-      {text:'2022 – Present', size: small?18:34, y:65},
-      {text:'Google Finance Division · AI Platforms & Devices', size: small?12:24, y:130},
-    ]),
-    sampleLines([
-      {text:'2021 – 2026', size: small?18:34, y:65},
-      {text:'Equity Derivative Trading · Global Markets Division · Associate', size: small?11:22, y:130},
-    ]),
-    sampleLines([
-      {text:'2018 – 2021', size: small?18:34, y:65},
-      {text:'Finance · Product Design', size: small?13:26, y:130},
-    ]),
-  ];
+        subPoints.forEach(p => {
+          allParticles.push({
+            sec: sectionIndex,
+            type: 'subtitle',
+            baseX: p.x,
+            baseY: p.y + lineYOffset,
+            x: p.x,
+            y: p.y + lineYOffset + (sectionIndex * -350),
+            z: 0,
+            vx: (Math.random() - 0.5) * 2.5,
+            vy: (Math.random() - 0.5) * 2.5,
+            vz: (Math.random() - 0.5) * 2.5
+          });
+        });
+      });
+    });
 
-  document.querySelectorAll('.desc-overlay').forEach(el=>{
-    el.style.top = `calc(50% + ${DESC_OFFSET}px)`;
-  });
-}
-buildAllTargets();
+    const count = allParticles.length;
+    const positions = new Float32Array(count * 3);
+    const initialPositions = new Float32Array(count * 3);
 
-// ─── background drift ───────────────────────────────────────────────
-function wideHome() {
-  let x,y;
-  if (Math.random() < 0.7) {
-    const corners = [{x:-W/2,y:-H/2},{x:W/2,y:-H/2},{x:-W/2,y:H/2},{x:W/2,y:H/2}];
-    const c = corners[Math.floor(Math.random()*4)];
-    const spread = Math.min(W,H)*0.34;
-    const ang = Math.random()*Math.PI*2, r = Math.random()*spread;
-    x = c.x*0.66 + Math.cos(ang)*r; y = c.y*0.66 + Math.sin(ang)*r;
-  } else {
-    x=(Math.random()-0.5)*W*1.5; y=(Math.random()-0.5)*H*1.5;
-  }
-  return { x, y, z:(Math.random()-0.5)*220, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3 };
-}
+    allParticles.forEach((p, i) => {
+      positions[i * 3] = p.x;
+      positions[i * 3 + 1] = p.y;
+      positions[i * 3 + 2] = p.z;
 
-// ─── pools ──────────────────────────────────────────────────────────
-const PUFF_HEAD = IS_MOBILE ? 24 : 34;
-const PUFF_DESC = IS_MOBILE ? 14 : 20;
-let headPts, descPts;
-let HEAD_POOL, DESC_POOL;
-let hDriftX,hDriftY,hDriftZ,hVelX,hVelY,hPuffX,hPuffY;
-let dDriftX,dDriftY,dVelX,dVelY,dPuffX,dPuffY;
+      initialPositions[i * 3] = p.x;
+      initialPositions[i * 3 + 1] = p.y;
+      initialPositions[i * 3 + 2] = p.z;
+    });
 
-function disposePts(p, group){ if(p){ group.remove(p); p.geometry.dispose(); p.material.dispose(); } }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-function initPools() {
-  disposePts(headPts, headGroup); disposePts(descPts, descGroup);
+    // Particle Material
+    const material = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: PARTICLE_SIZE,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending
+    });
 
-  HEAD_POOL = Math.max(...HEADLINE_TARGETS.map(t=>t.points.length));
-  DESC_POOL = Math.max(...DESC_TARGETS.map(t=>t.points.length));
+    const particleSystem = new THREE.Points(geometry, material);
+    scene.add(particleSystem);
 
-  headPts = makePoints(HEAD_POOL, headGroup, false);
-  descPts = makePoints(DESC_POOL, descGroup, false);
-  descGroup.position.set(0, -DESC_OFFSET, 0);
+    // --- Scroll Lock & Animation Engine ---
+    let targetScrollY = 0;
+    let currentScrollY = 0;
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
 
-  hDriftX=new Float32Array(HEAD_POOL); hDriftY=new Float32Array(HEAD_POOL); hDriftZ=new Float32Array(HEAD_POOL);
-  hVelX=new Float32Array(HEAD_POOL); hVelY=new Float32Array(HEAD_POOL);
-  hPuffX=new Float32Array(HEAD_POOL); hPuffY=new Float32Array(HEAD_POOL);
-  for (let i=0;i<HEAD_POOL;i++){
-    const p = wideHome();
-    hDriftX[i]=p.x; hDriftY[i]=p.y; hDriftZ[i]=p.z; hVelX[i]=p.vx; hVelY[i]=p.vy;
-    hPuffX[i]=(Math.random()-0.5)*2; hPuffY[i]=(Math.random()-0.5)*2;
-  }
+    window.addEventListener('scroll', () => {
+      // Clamp scroll to prevent elastic overscroll bounce glitches
+      targetScrollY = Math.max(0, Math.min(window.scrollY, maxScroll));
+    }, { passive: true });
 
-  dDriftX=new Float32Array(DESC_POOL); dDriftY=new Float32Array(DESC_POOL);
-  dVelX=new Float32Array(DESC_POOL); dVelY=new Float32Array(DESC_POOL);
-  dPuffX=new Float32Array(DESC_POOL); dPuffY=new Float32Array(DESC_POOL);
-  for (let i=0;i<DESC_POOL;i++){
-    const p = wideHome();
-    dDriftX[i]=p.x*0.6; dDriftY[i]=p.y*0.4; dVelX[i]=p.vx; dVelY[i]=p.vy;
-    dPuffX[i]=(Math.random()-0.5)*2; dPuffY[i]=(Math.random()-0.5)*2;
-  }
-}
-initPools();
+    const socialLinks = document.getElementById('social-links');
 
-// ─── ambient starfield ───────────────────────────────────────────────
-const N_STARS = IS_MOBILE ? 1000 : 2000;
-let starPts;
-const sx=new Float32Array(N_STARS), sy=new Float32Array(N_STARS), sz=new Float32Array(N_STARS);
-const svx=new Float32Array(N_STARS), svy=new Float32Array(N_STARS), svz=new Float32Array(N_STARS);
-const sOpa=new Float32Array(N_STARS), sSize=new Float32Array(N_STARS), sSeed=new Float32Array(N_STARS), sSpeed=new Float32Array(N_STARS);
+    function animate() {
+      requestAnimationFrame(animate);
 
-function initStars(){
-  disposePts(starPts, scene);
-  starPts = makePoints(N_STARS, scene, true);
-  for (let i=0;i<N_STARS;i++){
-    const p = wideHome();
-    sx[i]=p.x; sy[i]=p.y; sz[i]=p.z;
-    svx[i]=(Math.random()-0.5)*0.34; svy[i]=(Math.random()-0.5)*0.34; svz[i]=(Math.random()-0.5)*0.16;
-    sOpa[i]=0.18+Math.random()*0.42; sSize[i]=1.1+Math.random()*1.8;
-    sSeed[i]=Math.random()*Math.PI*2; sSpeed[i]=0.4+Math.random()*0.6;
-  }
-}
-initStars();
+      // Smooth interpolation (dampened lerp)
+      currentScrollY += (targetScrollY - currentScrollY) * 0.08;
 
-// ─── scroll + zone progress ────────────────────────────────────────
-let scrollY = 0;
-let zones = [];
-function buildZones(){
-  zones = ['z0','z1','z2','z3'].map(id=>{
-    const el = document.getElementById(id);
-    return { top: el.offsetTop, h: el.offsetHeight };
-  });
-}
-window.addEventListener('scroll', ()=>{ 
-  scrollY = window.scrollY;
-  buildZones(); 
-}, {passive:true});
+      // Scroll Progress Normalized
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = Math.max(0, Math.min(1, currentScrollY / (totalHeight || 1)));
 
-function zoneProgress(i){
-  if (!zones[i]) return 0;
-  const {top,h} = zones[i];
-  return clamp((scrollY - top)/h, 0, 1);
-}
+      // Move camera smoothly down the timeline
+      camera.position.y = -progress * 1050;
 
-function computeZone(p, isFirst, isLast){
-  const formEnd = isFirst ? 0 : 0.15;
-  const descFormEnd = formEnd + 0.10;
-  const descFadeStart = 0.42;
-  const descFadeEnd = 0.58;
+      const posAttr = geometry.attributes.position;
+      const posArr = posAttr.array;
 
-  const headlineT = p < formEnd ? ease(p/(formEnd||1)) : 1;
+      // Calculate section thresholds
+      const currentSectionFloat = progress * (SECTIONS.length - 1);
+      const activeSecIdx = Math.floor(currentSectionFloat);
+      const secProgress = currentSectionFloat - activeSecIdx;
 
-  let descF;
-  if (p < formEnd) descF = 0;
-  else if (p < descFormEnd) descF = ease((p-formEnd)/(descFormEnd-formEnd));
-  else if (p < descFadeStart) descF = 1;
-  else if (p < descFadeEnd) descF = ease(1-(p-descFadeStart)/(descFadeEnd-descFadeStart));
-  else descF = 0;
+      for (let i = 0; i < count; i++) {
+        const p = allParticles[i];
+        const i3 = i * 3;
 
-  let disperseF = 0;
-  if (isLast && p > 0.65) {
-    disperseF = ease((p - 0.65) / 0.35);
-  }
+        let targetX = initialPositions[i3];
+        let targetY = initialPositions[i3 + 1];
+        let targetZ = initialPositions[i3 + 2];
 
-  return { headlineT, descF, disperseF };
-}
+        // --- Smoother Dispersion Curve ---
+        // Subtitles start dispersing earlier, but move slowly and smoothly without snapping
+        if (p.sec === activeSecIdx) {
+          if (p.type === 'subtitle') {
+            // Smooth exponential curve (starts earlier, disperses gradually)
+            const disperseFactor = Math.pow(Math.max(0, secProgress), 1.8) * 120;
+            targetX += p.vx * disperseFactor;
+            targetY += p.vy * disperseFactor;
+            targetZ += p.vz * disperseFactor;
+          }
+        } else if (p.sec < activeSecIdx) {
+          // Fully dispersed past sections
+          const disperseFactor = 140;
+          targetX += p.vx * disperseFactor;
+          targetY += p.vy * disperseFactor;
+          targetZ += p.vz * disperseFactor;
+        }
 
-function getState(){
-  for (let i=0;i<4;i++){
-    const p = zoneProgress(i);
-    if (p < 1) {
-      const s = computeZone(p, i===0, i===3);
-      return { idx:i, prevIdx: i-1, headlineT:s.headlineT, descF:s.descF, disperseF:s.disperseF };
+        // Apply smooth particle positioning
+        posArr[i3] += (targetX - posArr[i3]) * 0.1;
+        posArr[i3 + 1] += (targetY - posArr[i3 + 1]) * 0.1;
+        posArr[i3 + 2] += (targetZ - posArr[i3 + 2]) * 0.1;
+      }
+
+      posAttr.needsUpdate = true;
+
+      // Toggle Social Links cleanly at the bottom
+      if (progress > 0.88) {
+        socialLinks.classList.add('visible');
+      } else {
+        socialLinks.classList.remove('visible');
+      }
+
+      renderer.render(scene, camera);
     }
-  }
-  return { idx:3, prevIdx:2, headlineT:1, descF:0, disperseF:1 };
-}
 
-const hint = document.getElementById('hint');
-window.addEventListener('scroll', ()=>{ hint.style.opacity = scrollY>60 ? '0':'0.35'; }, {passive:true});
-hint.style.opacity='0.35';
+    animate();
 
-const overlays = [0,1,2,3].map(i=>document.getElementById('ov'+i));
-
-// ─── render loop ──────────────────────────────────────────────────
-let time = 0;
-function frame(){
-  requestAnimationFrame(frame);
-  time += 0.006;
-
-  const { idx, prevIdx, headlineT, descF, disperseF } = getState();
-
-  headGroup.rotation.y = Math.sin(time*0.16) * 0.14;
-  headGroup.rotation.x = Math.sin(time*0.11) * 0.03;
-
-  // ambient stars
-  const spos = starPts.geometry.attributes.position.array;
-  const ssize = starPts.geometry.attributes.aSize.array;
-  const salpha = starPts.geometry.attributes.aAlpha.array;
-  for (let i=0;i<N_STARS;i++){
-    const rp = repel(sx[i], sy[i]);
-    sx[i] += svx[i] + rp.x;
-    sy[i] += svy[i] + rp.y;
-    sz[i] += svz[i];
-    if (sx[i]> W*0.95) sx[i]=-W*0.95;
-    if (sx[i]<-W*0.95) sx[i]= W*0.95;
-    if (sy[i]> H*0.95) sy[i]=-H*0.95;
-    if (sy[i]<-H*0.95) sy[i]= H*0.95;
-    if (sz[i]> 260) sz[i]=-260;
-    if (sz[i]<-260) sz[i]= 260;
-    const wobX = Math.sin(time*sSpeed[i]+sSeed[i])*10;
-    const wobY = Math.cos(time*sSpeed[i]*0.8+sSeed[i])*10;
-    const tw = 0.5+0.5*Math.sin(time*1.3+sSeed[i]);
-    const ix = i*3;
-    spos[ix]=sx[i]+wobX; spos[ix+1]=sy[i]+wobY; spos[ix+2]=sz[i];
-    ssize[i]=sSize[i]; salpha[i]=sOpa[i]*tw;
-  }
-  starPts.geometry.attributes.position.needsUpdate = true;
-  starPts.geometry.attributes.aSize.needsUpdate = true;
-  starPts.geometry.attributes.aAlpha.needsUpdate = true;
-
-  // headline animation & final dispersion
-  const A = prevIdx>=0 ? HEADLINE_TARGETS[prevIdx] : null;
-  const B = HEADLINE_TARGETS[idx];
-  const aLen = A ? A.points.length : 0;
-  const bLen = B.points.length;
-  const puffMag = Math.sin(clamp(headlineT,0,1)*Math.PI) * PUFF_HEAD;
-
-  const hpos = headPts.geometry.attributes.position.array;
-  const hsize = headPts.geometry.attributes.aSize.array;
-  const halpha = headPts.geometry.attributes.aAlpha.array;
-  for (let i=0;i<HEAD_POOL;i++){
-    const ix = i*3;
-    const hasA = A && i < aLen;
-    const hasB = i < bLen;
-
-    const rp = repel(hDriftX[i], hDriftY[i]);
-    hDriftX[i] += hVelX[i] + rp.x*0.6;
-    hDriftY[i] += hVelY[i] + rp.y*0.6;
-    if (hDriftX[i]> W*0.85) hDriftX[i]=-W*0.85;
-    if (hDriftX[i]<-W*0.85) hDriftX[i]= W*0.85;
-    if (hDriftY[i]> H*0.85) hDriftY[i]=-H*0.85;
-    if (hDriftY[i]<-H*0.85) hDriftY[i]= H*0.85;
-
-    if (disperseF > 0 && hasB) {
-      const tb = B.points[i];
-      hpos[ix]   = lerp(tb.x, hDriftX[i], disperseF) + hPuffX[i]*PUFF_HEAD*disperseF;
-      hpos[ix+1] = lerp(tb.y, hDriftY[i], disperseF) + hPuffY[i]*PUFF_HEAD*disperseF;
-      hpos[ix+2] = lerp(0, hDriftZ[i], disperseF);
-      halpha[i]  = lerp(0.92, 0.14, disperseF);
-      hsize[i]   = lerp(B.dotSize, 1.3, disperseF);
-    } else if (hasA && hasB) {
-      const ta=A.points[i], tb=B.points[i];
-      hpos[ix]   = lerp(ta.x, tb.x, headlineT) + hPuffX[i]*puffMag;
-      hpos[ix+1] = lerp(ta.y, tb.y, headlineT) + hPuffY[i]*puffMag;
-      hpos[ix+2] = 0;
-      halpha[i]  = 0.92;
-      hsize[i]   = B.dotSize;
-    } else if (hasB) {
-      const tb=B.points[i];
-      const lp = 1-headlineT;
-      hpos[ix]   = tb.x + hPuffX[i]*PUFF_HEAD*lp;
-      hpos[ix+1] = tb.y + hPuffY[i]*PUFF_HEAD*lp;
-      hpos[ix+2] = 0;
-      halpha[i]  = lerp(0, 0.92, headlineT);
-      hsize[i]   = B.dotSize;
-    } else if (hasA) {
-      const ta=A.points[i];
-      const lp = headlineT;
-      hpos[ix]   = ta.x + hPuffX[i]*PUFF_HEAD*lp;
-      hpos[ix+1] = ta.y + hPuffY[i]*PUFF_HEAD*lp;
-      hpos[ix+2] = 0;
-      halpha[i]  = lerp(0.92, 0, headlineT);
-      hsize[i]   = A.dotSize;
-    } else {
-      hpos[ix]   = hDriftX[i];
-      hpos[ix+1] = hDriftY[i];
-      hpos[ix+2] = hDriftZ[i];
-      halpha[i]  = 0.14 + 0.10*Math.sin(time*1.2 + i*0.37);
-      hsize[i]   = 1.3;
-    }
-  }
-  headPts.geometry.attributes.position.needsUpdate = true;
-  headPts.geometry.attributes.aSize.needsUpdate = true;
-  headPts.geometry.attributes.aAlpha.needsUpdate = true;
-
-  // description particles
-  const descTgt = idx>=0 ? DESC_TARGETS[idx] : null;
-  const dLen = descTgt ? descTgt.points.length : 0;
-  const dDot = descTgt ? descTgt.dotSize : 1.2;
-  const overlayOpacity = smoothstep(descF, 0.78, 0.95) * (1 - disperseF);
-  const particleFade = 1 - overlayOpacity;
-  const dPuffMag = Math.sin(clamp(descF,0,1)*Math.PI) * PUFF_DESC * 0.5;
-  const dpos = descPts.geometry.attributes.position.array;
-  const dsize = descPts.geometry.attributes.aSize.array;
-  const dalpha = descPts.geometry.attributes.aAlpha.array;
-  for (let i=0;i<DESC_POOL;i++){
-    const ix = i*3;
-    dDriftX[i] += dVelX[i];
-    dDriftY[i] += dVelY[i];
-    if (dDriftX[i]> W*0.7) dDriftX[i]=-W*0.7;
-    if (dDriftX[i]<-W*0.7) dDriftX[i]= W*0.7;
-    if (dDriftY[i]> H*0.7) dDriftY[i]=-H*0.7;
-    if (dDriftY[i]<-H*0.7) dDriftY[i]= H*0.7;
-
-    if (descTgt && i < dLen && descF > 0.003 && disperseF < 1) {
-      const t = descTgt.points[i];
-      dpos[ix]   = lerp(dDriftX[i], t.x, descF) + dPuffX[i]*dPuffMag;
-      dpos[ix+1] = lerp(dDriftY[i], t.y, descF) + dPuffY[i]*dPuffMag;
-      dpos[ix+2] = 0;
-      dalpha[i]  = lerp(0.06, 0.9, descF) * particleFade * (1 - disperseF);
-      dsize[i]   = dDot;
-    } else {
-      dpos[ix]   = dDriftX[i];
-      dpos[ix+1] = dDriftY[i];
-      dpos[ix+2] = 0;
-      dalpha[i]  = (0.12 + 0.09*Math.sin(time*1.3 + i*0.41)) * particleFade;
-      dsize[i]   = 1.1;
-    }
-  }
-  descPts.geometry.attributes.position.needsUpdate = true;
-  descPts.geometry.attributes.aSize.needsUpdate = true;
-  descPts.geometry.attributes.aAlpha.needsUpdate = true;
-
-  for (let i=0;i<4;i++){
-    overlays[i].style.opacity = (i===idx) ? overlayOpacity.toFixed(3) : '0';
-  }
-
-  renderer.render(scene, camera);
-}
-
-function onResize(){
-  W = window.innerWidth; H = window.innerHeight;
-  DPR = Math.min(window.devicePixelRatio||1, IS_MOBILE ? 1.5 : 2);
-  renderer.setPixelRatio(DPR);
-  renderer.setSize(W,H);
-  camera.left=-W/2; camera.right=W/2; camera.top=H/2; camera.bottom=-H/2;
-  camera.updateProjectionMatrix();
-  allMaterials.forEach(m => { m.uniforms.uDPR.value = DPR; });
-  buildAllTargets();
-  initPools();
-  initStars();
-  buildZones();
-}
-window.addEventListener('resize', onResize, {passive:true});
-
-document.fonts.ready.then(()=>{
-  buildAllTargets();
-  initPools();
-  initStars();
-  buildZones();
-  frame();
-});
-</script>
+    // Resize Handler (Debounced to avoid address bar toggles)
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (Math.abs(window.innerWidth - width) > 50) { // Only trigger on actual width changes (orientation/desktop resize)
+          width = window.innerWidth;
+          height = window.innerHeight;
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(width, height);
+        }
+      }, 250);
+    });
+  </script>
 </body>
 </html>
