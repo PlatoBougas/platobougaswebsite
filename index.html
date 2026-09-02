@@ -6,7 +6,14 @@
 <title>Plato Bougas</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { background:#000; overflow-x:hidden; width:100%; -webkit-tap-highlight-color:transparent; }
+  /* FIX 3: overscroll-behavior: none prevents the rubber-band jump at the bottom */
+  html, body { 
+    background:#000; 
+    overflow-x:hidden; 
+    width:100%; 
+    -webkit-tap-highlight-color:transparent; 
+    overscroll-behavior-y: none; 
+  }
   canvas#gl { position:fixed; top:0; left:0; width:100vw; height:100dvh; display:block; z-index:0; pointer-events:none; }
   .zone { position:relative; z-index:5; width:100%; }
 
@@ -261,8 +268,10 @@ let DESC_OFFSET = 110;
 
 function buildAllTargets() {
   const small = W < 640;
-  const headShift = small ? 20 : 40;
-  DESC_OFFSET = small ? 115 : 100;
+  
+  // FIX 1: Bring subtext and main text closer safely.
+  const headShift = small ? 15 : 25; 
+  DESC_OFFSET = small ? 75 : 85; 
 
   HEADLINE_TARGETS = [
     sampleGlyphs('Plato Bougas', small? 54:104, 1.4,3.2,30,80,HEAD_CAP),
@@ -391,9 +400,11 @@ function zoneProgress(i){
 
 function computeZone(p, isFirst, isLast){
   const formEnd = isFirst ? 0 : 0.15;
-  const descFormEnd = formEnd + 0.10;
-  const descFadeStart = 0.42;
-  const descFadeEnd = 0.58;
+  const descFormEnd = formEnd + 0.12;
+  
+  // FIX 4: Widened the gap here so fading takes longer as you scroll
+  const descFadeStart = 0.35;
+  const descFadeEnd = 0.85;
 
   const headlineT = p < formEnd ? ease(p/(formEnd||1)) : 1;
 
@@ -405,8 +416,9 @@ function computeZone(p, isFirst, isLast){
   else descF = 0;
 
   let disperseF = 0;
-  if (isLast && p > 0.65) {
-    disperseF = ease((p - 0.65) / 0.35);
+  // FIX 4: Started the final dispersion earlier so it transitions smoothly over a longer scroll
+  if (isLast && p > 0.40) {
+    disperseF = ease((p - 0.40) / 0.60);
   }
 
   return { headlineT, descF, disperseF };
@@ -576,7 +588,13 @@ function frame(){
   renderer.render(scene, camera);
 }
 
+// FIX 2: Only trigger expensive re-calculations on horizontal resize. 
+// Prevents mobile address bar from glitching the geometry mid-scroll.
+let lastW = window.innerWidth;
 function onResize(){
+  if (IS_MOBILE && window.innerWidth === lastW) return; 
+  lastW = window.innerWidth;
+  
   W = window.innerWidth; H = window.innerHeight;
   DPR = Math.min(window.devicePixelRatio||1, IS_MOBILE ? 1.5 : 2);
   renderer.setPixelRatio(DPR);
