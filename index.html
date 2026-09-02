@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Plato Bougas</title>
+<meta name="description" content="Analyst · Founder · Builder">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://platobougas.com">
+<meta property="og:title" content="Plato Bougas">
+<meta property="og:description" content="Analyst · Founder · Builder">
+<meta property="og:image" content="https://platobougas.com/thumbnail.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Plato Bougas">
+<meta name="twitter:description" content="Analyst · Founder · Builder">
+<meta name="twitter:image" content="https://platobougas.com/thumbnail.png">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { 
@@ -291,12 +301,14 @@ function buildAllTargets() {
   ];
   HEADLINE_TARGETS.forEach(t => t.points.forEach(p => { p.y += headShift; }));
 
-  // PERFECT ALIGNMENT MATH: Line-height dictates where the true center of the DOM element lives.
-  // These Y values are precisely calculated to match the geometric center of the CSS flex container.
+  // FIX 1: cap/body lines are now sampled symmetrically around the same canvas center (130)
+  // that the DOM overlay's translate(-50%,-50%) anchors to, so particles and text converge
+  // on and disperse from the exact same point instead of drifting apart.
   const capSize = small ? 16 : 24;
   const bodySize = small ? 12 : 16;
-  const capY = small ? 119 : 115;
-  const bodyY = small ? 144 : 151;
+  const lineGap = small ? 25 : 36;
+  const capY = 130 - lineGap/2;
+  const bodyY = 130 + lineGap/2;
 
   DESC_TARGETS = [
     sampleLines([{text:'Analyst · Founder · Builder', size: capSize, y:130}]),
@@ -369,7 +381,11 @@ function initPools() {
   dPuffX=new Float32Array(DESC_POOL); dPuffY=new Float32Array(DESC_POOL);
   for (let i=0;i<DESC_POOL;i++){
     const p = wideHome();
-    dDriftX[i]=p.x*0.6; dDriftY[i]=p.y*0.4; dVelX[i]=p.vx; dVelY[i]=p.vy;
+    // FIX 5: use the SAME spread as the real starfield (no longer scaled down to a small
+    // central patch) so these particles are visually indistinguishable from the background
+    // stars — meaning what you're seeing pulled into the subtitle genuinely reads as
+    // background particles joining the text, not a separate hidden pool.
+    dDriftX[i]=p.x; dDriftY[i]=p.y; dVelX[i]=p.vx; dVelY[i]=p.vy;
     dPuffX[i]=(Math.random()-0.5)*2; dPuffY[i]=(Math.random()-0.5)*2;
   }
 }
@@ -395,6 +411,31 @@ function initStars(){
 }
 initStars();
 
+// ─── FIX 4: periodic shooting star — fixed 30s cadence, faint fading tail, random path each time ─
+const TRAIL_LEN = 16;
+const starTrailPts = makePoints(TRAIL_LEN, scene, false);
+let shootingStar = null;
+let nextStarTime = performance.now() + 30000;
+let lastFrameTime = performance.now();
+
+function spawnShootingStar(){
+  const R = Math.max(W,H)*0.7;
+  const travelAngle = Math.random()*Math.PI*2;
+  const startAngle = travelAngle + Math.PI;
+  const startR = R * (0.85 + Math.random()*0.35);
+  const perpAngle = travelAngle + Math.PI/2;
+  const perpOffset = (Math.random()-0.5) * Math.min(W,H)*0.5;
+  const speed = 480 + Math.random()*260; // world units / second — a gentle streak, not a blaze
+  shootingStar = {
+    x: Math.cos(startAngle)*startR + Math.cos(perpAngle)*perpOffset,
+    y: Math.sin(startAngle)*startR + Math.sin(perpAngle)*perpOffset,
+    vx: Math.cos(travelAngle)*speed,
+    vy: Math.sin(travelAngle)*speed,
+    trail: [],
+    age: 0
+  };
+}
+
 // ─── scroll + zone progress ────────────────────────────────────────
 let scrollY = 0;
 let zones = [];
@@ -416,13 +457,13 @@ function zoneProgress(i){
 }
 
 function computeZone(p, isFirst, isLast){
-  // FASTER TRANSITIONS: Reduced thresholds so elements re-arrange quicker
-  const formEnd = isFirst ? 0 : 0.12; 
+  // FIX 3: shortened further — less scroll needed before the title re-arrangement completes
+  const formEnd = isFirst ? 0 : 0.07; 
   const descFormEnd = formEnd + 0.12;
   
-  // FASTER FADE: The description begins fading away just 35% through the section scroll
+  // FIX 2: shortened — less scroll needed for the subtitle to fully disperse once it starts
   const descFadeStart = 0.35;
-  const descFadeEnd = 0.70; 
+  const descFadeEnd = 0.55; 
 
   const headlineT = p < formEnd ? ease(p/(formEnd||1)) : 1;
 
@@ -494,6 +535,44 @@ function frame(){
   starPts.geometry.attributes.position.needsUpdate = true;
   starPts.geometry.attributes.aSize.needsUpdate = true;
   starPts.geometry.attributes.aAlpha.needsUpdate = true;
+
+  // shooting star — fixed real-time cadence, independent of scroll/animation time
+  const nowMs = performance.now();
+  const dt = Math.min((nowMs - lastFrameTime)/1000, 0.05);
+  lastFrameTime = nowMs;
+
+  if (!shootingStar && nowMs >= nextStarTime) {
+    spawnShootingStar();
+    nextStarTime = nowMs + 30000;
+  }
+  if (shootingStar) {
+    shootingStar.x += shootingStar.vx*dt;
+    shootingStar.y += shootingStar.vy*dt;
+    shootingStar.age += dt;
+    shootingStar.trail.unshift({x:shootingStar.x, y:shootingStar.y});
+    if (shootingStar.trail.length > TRAIL_LEN) shootingStar.trail.length = TRAIL_LEN;
+    const dist = Math.hypot(shootingStar.x, shootingStar.y);
+    if (dist > Math.max(W,H)*1.15 || shootingStar.age > 6) shootingStar = null;
+  }
+  const stPos = starTrailPts.geometry.attributes.position.array;
+  const stSize = starTrailPts.geometry.attributes.aSize.array;
+  const stAlpha = starTrailPts.geometry.attributes.aAlpha.array;
+  for (let i=0;i<TRAIL_LEN;i++){
+    const ix = i*3;
+    if (shootingStar && i < shootingStar.trail.length) {
+      const pt = shootingStar.trail[i];
+      const fade = 1 - i/TRAIL_LEN;
+      stPos[ix]=pt.x; stPos[ix+1]=pt.y; stPos[ix+2]=0;
+      stAlpha[i] = fade*fade*0.85;
+      stSize[i] = 2.6*fade + 0.6;
+    } else {
+      stPos[ix]=0; stPos[ix+1]=0; stPos[ix+2]=0;
+      stAlpha[i]=0; stSize[i]=0;
+    }
+  }
+  starTrailPts.geometry.attributes.position.needsUpdate = true;
+  starTrailPts.geometry.attributes.aSize.needsUpdate = true;
+  starTrailPts.geometry.attributes.aAlpha.needsUpdate = true;
 
   // headline animation & final dispersion
   const A = prevIdx>=0 ? HEADLINE_TARGETS[prevIdx] : null;
