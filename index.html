@@ -6,7 +6,6 @@
 <title>Plato Bougas</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  /* FIX 3: overscroll-behavior: none prevents the rubber-band jump at the bottom */
   html, body { 
     background:#000; 
     overflow-x:hidden; 
@@ -21,12 +20,23 @@
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
     text-align:center; pointer-events:none; opacity:0; z-index:8;
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-    width:90%; max-width:640px; transition:opacity 0.25s ease-out;
+    width:90%; max-width:640px;
   }
-  .desc-overlay .cap, .desc-overlay .body {
-    font-size:.85rem; color:#888; letter-spacing:.08em; font-weight:400; line-height:1.4;
+  
+  /* MATCHED FONT SIZES: Explicitly sized to perfectly align with 3D canvas coordinates */
+  .desc-overlay .cap {
+    color:#888; letter-spacing:.08em; font-weight:500; line-height:1.4;
+    font-size: 16px; margin-bottom: 6px;
   }
-  .desc-overlay .cap { margin-bottom:.4rem; }
+  .desc-overlay .body {
+    color:#888; letter-spacing:.08em; font-weight:500; line-height:1.4;
+    font-size: 12px;
+  }
+  
+  @media (min-width: 640px) {
+    .desc-overlay .cap { font-size: 24px; margin-bottom: 8px; }
+    .desc-overlay .body { font-size: 16px; }
+  }
 
   .contact-zone {
     position:relative; z-index:10; height:100vh; height:100dvh;
@@ -47,10 +57,11 @@
 </head>
 <body>
 
-<div class="zone" id="z0" style="height:140vh;"></div>
-<div class="zone" id="z1" style="height:160vh;"></div>
-<div class="zone" id="z2" style="height:160vh;"></div>
-<div class="zone" id="z3" style="height:160vh;"></div>
+<!-- SHORTER ZONES: Requires significantly less scrolling to trigger transitions -->
+<div class="zone" id="z0" style="height:100vh;"></div>
+<div class="zone" id="z1" style="height:120vh;"></div>
+<div class="zone" id="z2" style="height:120vh;"></div>
+<div class="zone" id="z3" style="height:120vh;"></div>
 
 <div class="desc-overlay" id="ov0">
   <div class="cap">Analyst · Founder · Builder</div>
@@ -192,14 +203,14 @@ function makePoints(count, group, attenuated){
 
 // ─── text sampling ──────────────────────────────────────────────────
 const HEAD_CAP = IS_MOBILE ? 2200 : 3400;
-const DESC_CAP = IS_MOBILE ? 1600 : 2600;
+const DESC_CAP = IS_MOBILE ? 2200 : 3600;
 
 function sampleGlyphs(textLines, fontSize, minStep, maxStep, divisor, threshold, cap) {
   const CW=1400, CH=440;
   const c=document.createElement('canvas'); c.width=CW; c.height=CH;
   const x=c.getContext('2d');
   x.fillStyle='#fff';
-  x.font=`700 ${fontSize}px -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif`;
+  x.font=`700 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
   x.textAlign='center'; x.textBaseline='middle';
   
   const lines = Array.isArray(textLines) ? textLines : [textLines];
@@ -238,12 +249,12 @@ function sampleLines(lines) {
   x.fillStyle='#fff'; x.textAlign='center'; x.textBaseline='middle';
   let minFont=Infinity;
   lines.forEach(l=>{
-    x.font=`700 ${l.size}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    x.font=`500 ${l.size}px -apple-system, BlinkMacSystemFont, sans-serif`;
     x.fillText(l.text, CW/2, l.y);
     minFont = Math.min(minFont, l.size);
   });
-  const step = computeStep(minFont, 1.6, 3.0, 20);
-  const jitter = step*0.42;
+  const step = computeStep(minFont, 1.4, 2.4, 12);
+  const jitter = step*0.35;
   const d = x.getImageData(0,0,CW,CH).data;
   const pts=[];
   for (let row=0; row<CH; row+=step){
@@ -269,7 +280,6 @@ let DESC_OFFSET = 110;
 function buildAllTargets() {
   const small = W < 640;
   
-  // FIX 1: Bring subtext and main text closer safely.
   const headShift = small ? 15 : 25; 
   DESC_OFFSET = small ? 75 : 85; 
 
@@ -281,19 +291,26 @@ function buildAllTargets() {
   ];
   HEADLINE_TARGETS.forEach(t => t.points.forEach(p => { p.y += headShift; }));
 
+  // PERFECT ALIGNMENT MATH: Line-height dictates where the true center of the DOM element lives.
+  // These Y values are precisely calculated to match the geometric center of the CSS flex container.
+  const capSize = small ? 16 : 24;
+  const bodySize = small ? 12 : 16;
+  const capY = small ? 119 : 115;
+  const bodyY = small ? 144 : 151;
+
   DESC_TARGETS = [
-    sampleLines([{text:'Analyst · Founder · Builder', size: small?18:34, y:110}]),
+    sampleLines([{text:'Analyst · Founder · Builder', size: capSize, y:130}]),
     sampleLines([
-      {text:'2022 – Present', size: small?18:34, y:65},
-      {text:'Google Finance Division · AI Platforms & Devices', size: small?12:24, y:130},
+      {text:'2022 – Present', size: capSize, y: capY},
+      {text:'Google Finance Division · AI Platforms & Devices', size: bodySize, y: bodyY},
     ]),
     sampleLines([
-      {text:'2021 – 2026', size: small?18:34, y:65},
-      {text:'Equity Derivative Trading · Global Markets Division · Associate', size: small?11:22, y:130},
+      {text:'2021 – 2026', size: capSize, y: capY},
+      {text:'Equity Derivative Trading · Global Markets Division · Associate', size: bodySize, y: bodyY},
     ]),
     sampleLines([
-      {text:'2018 – 2021', size: small?18:34, y:65},
-      {text:'Finance · Product Design', size: small?13:26, y:130},
+      {text:'2018 – 2021', size: capSize, y: capY},
+      {text:'Finance · Product Design', size: bodySize, y: bodyY},
     ]),
   ];
 
@@ -399,12 +416,13 @@ function zoneProgress(i){
 }
 
 function computeZone(p, isFirst, isLast){
-  const formEnd = isFirst ? 0 : 0.15;
+  // FASTER TRANSITIONS: Reduced thresholds so elements re-arrange quicker
+  const formEnd = isFirst ? 0 : 0.12; 
   const descFormEnd = formEnd + 0.12;
   
-  // FIX 4: Widened the gap here so fading takes longer as you scroll
+  // FASTER FADE: The description begins fading away just 35% through the section scroll
   const descFadeStart = 0.35;
-  const descFadeEnd = 0.85;
+  const descFadeEnd = 0.70; 
 
   const headlineT = p < formEnd ? ease(p/(formEnd||1)) : 1;
 
@@ -416,9 +434,8 @@ function computeZone(p, isFirst, isLast){
   else descF = 0;
 
   let disperseF = 0;
-  // FIX 4: Started the final dispersion earlier so it transitions smoothly over a longer scroll
-  if (isLast && p > 0.40) {
-    disperseF = ease((p - 0.40) / 0.60);
+  if (isLast && p > 0.30) {
+    disperseF = ease((p - 0.30) / 0.70);
   }
 
   return { headlineT, descF, disperseF };
@@ -547,8 +564,11 @@ function frame(){
   const descTgt = idx>=0 ? DESC_TARGETS[idx] : null;
   const dLen = descTgt ? descTgt.points.length : 0;
   const dDot = descTgt ? descTgt.dotSize : 1.2;
-  const overlayOpacity = smoothstep(descF, 0.78, 0.95) * (1 - disperseF);
+  
+  // SEAMLESS OVERLAP: The solid DOM text cross-fades precisely as the particles begin breaking formation
+  const overlayOpacity = smoothstep(descF, 0.85, 0.98) * (1 - disperseF);
   const particleFade = 1 - overlayOpacity;
+  
   const dPuffMag = Math.sin(clamp(descF,0,1)*Math.PI) * PUFF_DESC * 0.5;
   const dpos = descPts.geometry.attributes.position.array;
   const dsize = descPts.geometry.attributes.aSize.array;
@@ -588,8 +608,6 @@ function frame(){
   renderer.render(scene, camera);
 }
 
-// FIX 2: Only trigger expensive re-calculations on horizontal resize. 
-// Prevents mobile address bar from glitching the geometry mid-scroll.
 let lastW = window.innerWidth;
 function onResize(){
   if (IS_MOBILE && window.innerWidth === lastW) return; 
