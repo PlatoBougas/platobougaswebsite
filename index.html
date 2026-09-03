@@ -27,13 +27,15 @@
   .zone { position:relative; z-index:5; width:100%; }
 
   .desc-overlay {
-    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    /* FIX 1: left/top are now set explicitly in JS (in px, from the same W/H the particles use)
+       rather than via CSS 50% — CSS percentage-of-viewport and window.innerHeight can disagree
+       on mobile Safari when the address bar shows/hides, which is what caused the misalignment. */
+    position:fixed; transform:translate(-50%,-50%);
     text-align:center; pointer-events:none; opacity:0; z-index:8;
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
     width:90%; max-width:640px;
   }
   
-  /* MATCHED FONT SIZES: Explicitly sized to perfectly align with 3D canvas coordinates */
   .desc-overlay .cap {
     color:#888; letter-spacing:.08em; font-weight:500; line-height:1.4;
     font-size: 16px; margin-bottom: 6px;
@@ -67,7 +69,6 @@
 </head>
 <body>
 
-<!-- SHORTER ZONES: Requires significantly less scrolling to trigger transitions -->
 <div class="zone" id="z0" style="height:100vh;"></div>
 <div class="zone" id="z1" style="height:120vh;"></div>
 <div class="zone" id="z2" style="height:120vh;"></div>
@@ -108,8 +109,15 @@ function computeStep(fontSize, minS, maxS, divisor){ return clamp(fontSize/divis
 
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 640;
 
+// FIX 1: visualViewport reports the TRUE current viewport (accounts for mobile Safari's
+// address bar showing/hiding), unlike window.innerHeight which can lag/disagree with it.
+function getViewportSize(){
+  if (window.visualViewport) return { w: window.visualViewport.width, h: window.visualViewport.height };
+  return { w: window.innerWidth, h: window.innerHeight };
+}
+
 // ─── renderer / scene / camera ─────────────────────────────────────
-let W = window.innerWidth, H = window.innerHeight;
+let { w: W, h: H } = getViewportSize();
 let DPR = Math.min(window.devicePixelRatio||1, IS_MOBILE ? 1.5 : 2);
 
 const renderer = new THREE.WebGLRenderer({ antialias:!IS_MOBILE, alpha:false });
@@ -129,6 +137,15 @@ const headGroup = new THREE.Group();
 scene.add(headGroup);
 const descGroup = new THREE.Group();
 scene.add(descGroup);
+
+// ─── FIX 2: explicit wheel -> scroll handling ───────────────────────
+// Takes full manual control of wheel-driven scrolling so it works regardless of whatever
+// was silently swallowing the native wheel-to-scroll behavior.
+window.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const multiplier = e.deltaMode === 1 ? 18 : (e.deltaMode === 2 ? window.innerHeight : 1);
+  window.scrollBy(0, e.deltaY * multiplier);
+}, { passive: false });
 
 // ─── mouse / touch repulsion ────────────────────────────────────────
 let mouseX = 999999, mouseY = 999999;
@@ -285,13 +302,15 @@ function sampleLines(lines) {
 }
 
 let HEADLINE_TARGETS = [], DESC_TARGETS = [];
-let DESC_OFFSET = 110;
+let DESC_OFFSET = 70;
 
 function buildAllTargets() {
   const small = W < 640;
   
   const headShift = small ? 15 : 25; 
-  DESC_OFFSET = small ? 75 : 85; 
+  // FIX 3: pulled the subtitle noticeably closer to the title (was 75/85), while keeping
+  // enough clearance below the tallest headline ("Google") to guarantee no overlap.
+  DESC_OFFSET = small ? 48 : 70; 
 
   HEADLINE_TARGETS = [
     sampleGlyphs('Plato Bougas', small? 54:104, 1.4,3.2,30,80,HEAD_CAP),
@@ -301,9 +320,6 @@ function buildAllTargets() {
   ];
   HEADLINE_TARGETS.forEach(t => t.points.forEach(p => { p.y += headShift; }));
 
-  // FIX 1: cap/body lines are now sampled symmetrically around the same canvas center (130)
-  // that the DOM overlay's translate(-50%,-50%) anchors to, so particles and text converge
-  // on and disperse from the exact same point instead of drifting apart.
   const capSize = small ? 16 : 24;
   const bodySize = small ? 12 : 16;
   const lineGap = small ? 25 : 36;
@@ -326,8 +342,12 @@ function buildAllTargets() {
     ]),
   ];
 
+  // FIX 1: position the DOM overlay in explicit pixels using the exact same W/H the
+  // particle system uses, instead of CSS "50%" (which can read a different viewport
+  // height than our JS on mobile Safari, causing the drift you saw).
   document.querySelectorAll('.desc-overlay').forEach(el=>{
-    el.style.top = `calc(50% + ${DESC_OFFSET}px)`;
+    el.style.left = (W/2) + 'px';
+    el.style.top = (H/2 + DESC_OFFSET) + 'px';
   });
 }
 buildAllTargets();
@@ -381,10 +401,6 @@ function initPools() {
   dPuffX=new Float32Array(DESC_POOL); dPuffY=new Float32Array(DESC_POOL);
   for (let i=0;i<DESC_POOL;i++){
     const p = wideHome();
-    // FIX 5: use the SAME spread as the real starfield (no longer scaled down to a small
-    // central patch) so these particles are visually indistinguishable from the background
-    // stars — meaning what you're seeing pulled into the subtitle genuinely reads as
-    // background particles joining the text, not a separate hidden pool.
     dDriftX[i]=p.x; dDriftY[i]=p.y; dVelX[i]=p.vx; dVelY[i]=p.vy;
     dPuffX[i]=(Math.random()-0.5)*2; dPuffY[i]=(Math.random()-0.5)*2;
   }
@@ -411,7 +427,7 @@ function initStars(){
 }
 initStars();
 
-// ─── FIX 4: periodic shooting star — fixed 30s cadence, faint fading tail, random path each time ─
+// ─── periodic shooting star: every 30s, faint fading tail, random path each time ───
 const TRAIL_LEN = 16;
 const starTrailPts = makePoints(TRAIL_LEN, scene, false);
 let shootingStar = null;
@@ -425,12 +441,33 @@ function spawnShootingStar(){
   const startR = R * (0.85 + Math.random()*0.35);
   const perpAngle = travelAngle + Math.PI/2;
   const perpOffset = (Math.random()-0.5) * Math.min(W,H)*0.5;
-  const speed = 480 + Math.random()*260; // world units / second — a gentle streak, not a blaze
+  const speed = 480 + Math.random()*260;
   shootingStar = {
     x: Math.cos(startAngle)*startR + Math.cos(perpAngle)*perpOffset,
     y: Math.sin(startAngle)*startR + Math.sin(perpAngle)*perpOffset,
     vx: Math.cos(travelAngle)*speed,
     vy: Math.sin(travelAngle)*speed,
+    trail: [],
+    age: 0
+  };
+}
+
+// ─── FIX 6: rare rocket easter egg — every 60s, slow, stays clear of the title/subtitle band ───
+const ROCKET_TRAIL_LEN = 10;
+const rocketPts = makePoints(ROCKET_TRAIL_LEN, scene, false);
+let rocket = null;
+let nextRocketTime = performance.now() + 60000;
+
+function spawnRocket(){
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  // upper band, well clear of where the title/subtitle live (roughly the middle of the screen)
+  const y = H * (0.30 + Math.random()*0.14);
+  const speed = 90 + Math.random()*70; // noticeably slower than the shooting star
+  rocket = {
+    x: dir > 0 ? -W*0.65 : W*0.65,
+    y: y,
+    vx: speed*dir,
+    vy: (Math.random()-0.5)*8,
     trail: [],
     age: 0
   };
@@ -457,13 +494,12 @@ function zoneProgress(i){
 }
 
 function computeZone(p, isFirst, isLast){
-  // FIX 3: shortened further — less scroll needed before the title re-arrangement completes
-  const formEnd = isFirst ? 0 : 0.07; 
-  const descFormEnd = formEnd + 0.12;
-  
-  // FIX 2: shortened — less scroll needed for the subtitle to fully disperse once it starts
-  const descFadeStart = 0.35;
-  const descFadeEnd = 0.55; 
+  // FIX 5: less scroll needed for the title to re-arrange (was 0.07)
+  const formEnd = isFirst ? 0 : 0.04; 
+  // FIX 4: subtitle assembly is slower now (was +0.12, i.e. much quicker)
+  const descFormEnd = formEnd + 0.22;
+  const descFadeStart = 0.42;
+  const descFadeEnd = 0.60; 
 
   const headlineT = p < formEnd ? ease(p/(formEnd||1)) : 1;
 
@@ -536,11 +572,11 @@ function frame(){
   starPts.geometry.attributes.aSize.needsUpdate = true;
   starPts.geometry.attributes.aAlpha.needsUpdate = true;
 
-  // shooting star — fixed real-time cadence, independent of scroll/animation time
   const nowMs = performance.now();
   const dt = Math.min((nowMs - lastFrameTime)/1000, 0.05);
   lastFrameTime = nowMs;
 
+  // shooting star
   if (!shootingStar && nowMs >= nextStarTime) {
     spawnShootingStar();
     nextStarTime = nowMs + 30000;
@@ -573,6 +609,39 @@ function frame(){
   starTrailPts.geometry.attributes.position.needsUpdate = true;
   starTrailPts.geometry.attributes.aSize.needsUpdate = true;
   starTrailPts.geometry.attributes.aAlpha.needsUpdate = true;
+
+  // rare rocket easter egg
+  if (!rocket && nowMs >= nextRocketTime) {
+    spawnRocket();
+    nextRocketTime = nowMs + 60000;
+  }
+  if (rocket) {
+    rocket.x += rocket.vx*dt;
+    rocket.y += rocket.vy*dt;
+    rocket.age += dt;
+    rocket.trail.unshift({x:rocket.x, y:rocket.y});
+    if (rocket.trail.length > ROCKET_TRAIL_LEN) rocket.trail.length = ROCKET_TRAIL_LEN;
+    if (Math.abs(rocket.x) > W*0.7 || rocket.age > 20) rocket = null;
+  }
+  const rkPos = rocketPts.geometry.attributes.position.array;
+  const rkSize = rocketPts.geometry.attributes.aSize.array;
+  const rkAlpha = rocketPts.geometry.attributes.aAlpha.array;
+  for (let i=0;i<ROCKET_TRAIL_LEN;i++){
+    const ix = i*3;
+    if (rocket && i < rocket.trail.length) {
+      const pt = rocket.trail[i];
+      const fade = 1 - i/ROCKET_TRAIL_LEN;
+      rkPos[ix]=pt.x; rkPos[ix+1]=pt.y; rkPos[ix+2]=0;
+      rkAlpha[i] = fade*fade*0.5;
+      rkSize[i] = 1.6*fade + 0.4;
+    } else {
+      rkPos[ix]=0; rkPos[ix+1]=0; rkPos[ix+2]=0;
+      rkAlpha[i]=0; rkSize[i]=0;
+    }
+  }
+  rocketPts.geometry.attributes.position.needsUpdate = true;
+  rocketPts.geometry.attributes.aSize.needsUpdate = true;
+  rocketPts.geometry.attributes.aAlpha.needsUpdate = true;
 
   // headline animation & final dispersion
   const A = prevIdx>=0 ? HEADLINE_TARGETS[prevIdx] : null;
@@ -644,7 +713,6 @@ function frame(){
   const dLen = descTgt ? descTgt.points.length : 0;
   const dDot = descTgt ? descTgt.dotSize : 1.2;
   
-  // SEAMLESS OVERLAP: The solid DOM text cross-fades precisely as the particles begin breaking formation
   const overlayOpacity = smoothstep(descF, 0.85, 0.98) * (1 - disperseF);
   const particleFade = 1 - overlayOpacity;
   
@@ -687,12 +755,15 @@ function frame(){
   renderer.render(scene, camera);
 }
 
-let lastW = window.innerWidth;
+let lastW = W, lastH = H;
 function onResize(){
-  if (IS_MOBILE && window.innerWidth === lastW) return; 
-  lastW = window.innerWidth;
+  const vp = getViewportSize();
+  // FIX 1: previously this only checked width, so on mobile a pure height change
+  // (address bar showing/hiding) was silently ignored and everything drifted out of sync.
+  if (IS_MOBILE && vp.w === lastW && vp.h === lastH) return; 
+  lastW = vp.w; lastH = vp.h;
   
-  W = window.innerWidth; H = window.innerHeight;
+  W = vp.w; H = vp.h;
   DPR = Math.min(window.devicePixelRatio||1, IS_MOBILE ? 1.5 : 2);
   renderer.setPixelRatio(DPR);
   renderer.setSize(W,H);
@@ -705,6 +776,9 @@ function onResize(){
   buildZones();
 }
 window.addEventListener('resize', onResize, {passive:true});
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', onResize, {passive:true});
+}
 
 document.fonts.ready.then(()=>{
   buildAllTargets();
