@@ -48,14 +48,19 @@
       box-sizing: border-box;
     }
 
-    html,
+    html {
+      background: #000;
+      width: 100%;
+      overflow-x: hidden;
+      -webkit-text-size-adjust: 100%;
+    }
+
     body {
       background: #000;
-      overflow-x: hidden;
       width: 100%;
+      min-height: 100%;
+      overflow-x: hidden;
       -webkit-tap-highlight-color: transparent;
-      overscroll-behavior-y: none;
-      touch-action: pan-y;
       -webkit-overflow-scrolling: touch;
       cursor: grab;
       user-select: none;
@@ -902,12 +907,8 @@
     }, { passive: false });
 
     window.addEventListener('scroll', () => {
-      if (IS_MOBILE) {
-        targetScrollY = window.scrollY;
-        smoothedScrollY = window.scrollY;
-      } else if (Math.abs(window.scrollY - smoothedScrollY) > 80) {
-        targetScrollY = window.scrollY;
-      }
+      targetScrollY = window.scrollY;
+      smoothedScrollY = window.scrollY;
     }, { passive: true });
 
     // ─── 3D Title Interactive Spin & Momentum Physics ────────────────────
@@ -957,6 +958,8 @@
     let touchStartX = 0, touchStartY = 0;
     let touchLastX = 0, touchLastY = 0;
     let touchMode = 'undecided'; // 'undecided' | 'spin' | 'scroll'
+    let touchVelY = 0;
+    let touchMomentumY = 0;
 
     window.addEventListener('touchstart', e => {
       if (!e.touches || e.touches.length === 0) return;
@@ -967,6 +970,8 @@
       touchLastX = t.clientX;
       touchLastY = t.clientY;
       touchMode = 'undecided';
+      touchVelY = 0;
+      touchMomentumY = 0;
       userSpinVel = 0;
       setMouseFromClient(t.clientX, t.clientY);
     }, { passive: true });
@@ -987,7 +992,7 @@
         const absX = Math.abs(diffX);
         const absY = Math.abs(diffY);
         if (absX > 6 || absY > 6) {
-          if (absX > absY * 1.15) {
+          if (absX > absY * 1.2) {
             touchMode = 'spin';
             isDraggingTitle = true;
           } else {
@@ -1001,6 +1006,10 @@
         userSpinYaw += stepX * mobileSens;
         userSpinVel = stepX * mobileSens * 0.85;
         userSpinYaw = clamp(userSpinYaw, -0.85, 0.85);
+      } else if (touchMode === 'scroll') {
+        const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        touchVelY = stepY * 1.35;
+        targetScrollY = clamp(targetScrollY + touchVelY, 0, maxScroll);
       }
 
       touchLastX = curX;
@@ -1010,8 +1019,13 @@
     const endTouch = () => {
       if (touchMode === 'spin') {
         isDraggingTitle = false;
+      } else if (touchMode === 'scroll') {
+        if (Math.abs(touchVelY) > 1.5) {
+          touchMomentumY = clamp(touchVelY, -36, 36);
+        }
       }
       touchMode = 'undecided';
+      touchVelY = 0;
       mouseX = 999999;
       mouseY = 999999;
     };
@@ -1158,17 +1172,31 @@
       requestAnimationFrame(frame);
       try {
         time += 0.006;
+        const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+
+      if (Math.abs(touchMomentumY) > 0.5) {
+        targetScrollY = clamp(targetScrollY + touchMomentumY, 0, maxScroll);
+        touchMomentumY *= 0.92;
+      } else {
+        touchMomentumY = 0;
+      }
 
       if (IS_MOBILE) {
-        targetScrollY = window.scrollY;
-        smoothedScrollY = window.scrollY;
+        if (Math.abs(window.scrollY - smoothedScrollY) > 2) {
+          targetScrollY = window.scrollY;
+          smoothedScrollY = window.scrollY;
+        } else {
+          const scrollDamping = 0.32;
+          smoothedScrollY += (targetScrollY - smoothedScrollY) * scrollDamping;
+          if (Math.abs(window.scrollY - smoothedScrollY) > 1) {
+            window.scrollTo(0, Math.round(smoothedScrollY));
+          }
+        }
       } else {
         const scrollDamping = 0.09;
         smoothedScrollY += (targetScrollY - smoothedScrollY) * scrollDamping;
         window.scrollTo(0, Math.round(smoothedScrollY));
       }
-
-      const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
       let normProgress = clamp(smoothedScrollY / maxScroll, 0, 1);
       if (urlParams.has('contact')) {
         normProgress = 1.0;
