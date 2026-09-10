@@ -61,7 +61,6 @@
       min-height: 100%;
       overflow-x: hidden;
       -webkit-tap-highlight-color: transparent;
-      -webkit-overflow-scrolling: touch;
       cursor: grab;
       user-select: none;
       -webkit-user-select: none;
@@ -907,10 +906,7 @@
     }, { passive: false });
 
     window.addEventListener('scroll', () => {
-      if (IS_MOBILE) {
-        targetScrollY = window.scrollY;
-        smoothedScrollY = window.scrollY;
-      } else if (Math.abs(window.scrollY - smoothedScrollY) > 80) {
+      if (Math.abs(window.scrollY - smoothedScrollY) > 80) {
         targetScrollY = window.scrollY;
       }
     }, { passive: true });
@@ -961,16 +957,20 @@
     // 2. Mobile Touch: Horizontal Swipe Spins Title, Vertical Swipe Scrolls Page
     let touchStartX = 0, touchStartY = 0;
     let touchLastX = 0, touchLastY = 0;
+    let touchLastTime = 0;
+    let touchVelY = 0;
     let touchMode = 'undecided'; // 'undecided' | 'spin' | 'scroll'
 
     window.addEventListener('touchstart', e => {
       if (!e.touches || e.touches.length === 0) return;
-      if (e.target.closest('a')) return;
+      if (e.target && e.target.closest && e.target.closest('a')) return;
       const t = e.touches[0];
       touchStartX = t.clientX;
       touchStartY = t.clientY;
       touchLastX = t.clientX;
       touchLastY = t.clientY;
+      touchLastTime = performance.now();
+      touchVelY = 0;
       touchMode = 'undecided';
       userSpinVel = 0;
       setMouseFromClient(t.clientX, t.clientY);
@@ -981,10 +981,18 @@
       const t = e.touches[0];
       const curX = t.clientX;
       const curY = t.clientY;
+      const now = performance.now();
+      const dt = Math.max(1, now - touchLastTime);
+      touchLastTime = now;
+
       const diffX = curX - touchStartX;
       const diffY = curY - touchStartY;
       const stepX = curX - touchLastX;
       const stepY = touchLastY - curY; // positive when swiping up to scroll down
+
+      // Instantaneous velocity (px/ms) with low-pass filter
+      const instantVelY = stepY / dt;
+      touchVelY = touchVelY * 0.25 + instantVelY * 0.75;
 
       setMouseFromClient(curX, curY);
 
@@ -1006,6 +1014,9 @@
         userSpinYaw += stepX * mobileSens;
         userSpinVel = stepX * mobileSens * 0.85;
         userSpinYaw = clamp(userSpinYaw, -0.85, 0.85);
+      } else if (touchMode === 'scroll') {
+        const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        targetScrollY = clamp(targetScrollY + stepY * 1.5, 0, maxScroll);
       }
 
       touchLastX = curX;
@@ -1015,8 +1026,16 @@
     const endTouch = () => {
       if (touchMode === 'spin') {
         isDraggingTitle = false;
+      } else if (touchMode === 'scroll') {
+        // Natural flick momentum: effortlessly glide through ~1 stage per brisk flick
+        if (Math.abs(touchVelY) > 0.08) {
+          const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+          const flickDistance = clamp(touchVelY * 550, -window.innerHeight * 1.5, window.innerHeight * 1.5);
+          targetScrollY = clamp(targetScrollY + flickDistance, 0, maxScroll);
+        }
       }
       touchMode = 'undecided';
+      touchVelY = 0;
       mouseX = 999999;
       mouseY = 999999;
     };
@@ -1173,14 +1192,9 @@
       requestAnimationFrame(frame);
       try {
         time += 0.006;
-      if (IS_MOBILE) {
-        targetScrollY = window.scrollY;
-        smoothedScrollY = window.scrollY;
-      } else {
-        const scrollDamping = 0.09;
-        smoothedScrollY += (targetScrollY - smoothedScrollY) * scrollDamping;
-        window.scrollTo(0, Math.round(smoothedScrollY));
-      }
+      const scrollDamping = 0.09;
+      smoothedScrollY += (targetScrollY - smoothedScrollY) * scrollDamping;
+      window.scrollTo(0, Math.round(smoothedScrollY));
 
       const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
       let normProgress = clamp(smoothedScrollY / maxScroll, 0, 1);
