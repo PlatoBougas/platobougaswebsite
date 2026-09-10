@@ -907,8 +907,12 @@
     }, { passive: false });
 
     window.addEventListener('scroll', () => {
-      targetScrollY = window.scrollY;
-      smoothedScrollY = window.scrollY;
+      if (IS_MOBILE) {
+        targetScrollY = window.scrollY;
+        smoothedScrollY = window.scrollY;
+      } else if (Math.abs(window.scrollY - smoothedScrollY) > 80) {
+        targetScrollY = window.scrollY;
+      }
     }, { passive: true });
 
     // ─── 3D Title Interactive Spin & Momentum Physics ────────────────────
@@ -958,8 +962,6 @@
     let touchStartX = 0, touchStartY = 0;
     let touchLastX = 0, touchLastY = 0;
     let touchMode = 'undecided'; // 'undecided' | 'spin' | 'scroll'
-    let touchVelY = 0;
-    let touchMomentumY = 0;
 
     window.addEventListener('touchstart', e => {
       if (!e.touches || e.touches.length === 0) return;
@@ -970,8 +972,6 @@
       touchLastX = t.clientX;
       touchLastY = t.clientY;
       touchMode = 'undecided';
-      touchVelY = 0;
-      touchMomentumY = 0;
       userSpinVel = 0;
       setMouseFromClient(t.clientX, t.clientY);
     }, { passive: true });
@@ -992,7 +992,7 @@
         const absX = Math.abs(diffX);
         const absY = Math.abs(diffY);
         if (absX > 6 || absY > 6) {
-          if (absX > absY * 1.2) {
+          if (absX > absY * 1.15) {
             touchMode = 'spin';
             isDraggingTitle = true;
           } else {
@@ -1006,10 +1006,6 @@
         userSpinYaw += stepX * mobileSens;
         userSpinVel = stepX * mobileSens * 0.85;
         userSpinYaw = clamp(userSpinYaw, -0.85, 0.85);
-      } else if (touchMode === 'scroll') {
-        const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-        touchVelY = stepY * 1.35;
-        targetScrollY = clamp(targetScrollY + touchVelY, 0, maxScroll);
       }
 
       touchLastX = curX;
@@ -1019,13 +1015,8 @@
     const endTouch = () => {
       if (touchMode === 'spin') {
         isDraggingTitle = false;
-      } else if (touchMode === 'scroll') {
-        if (Math.abs(touchVelY) > 1.5) {
-          touchMomentumY = clamp(touchVelY, -36, 36);
-        }
       }
       touchMode = 'undecided';
-      touchVelY = 0;
       mouseX = 999999;
       mouseY = 999999;
     };
@@ -1064,81 +1055,91 @@
       if (p < 0.030) {
         fromIdx = 0; toIdx = 0; interpT = 0; morphProgress = 0;
         activeDescIdx = 0; descOpacity = 0; disperseF = 0;
-      } else if (p < 0.100) {
+      } else if (p < 0.095) {
         fromIdx = 0; toIdx = 0; interpT = 0; morphProgress = 0;
         activeDescIdx = 0;
-        descOpacity = smoothstep(0.030, 0.100, p);
+        descOpacity = smoothstep(0.030, 0.095, p);
+        disperseF = 0;
+      } else if (p < 0.120) {
+        fromIdx = 0; toIdx = 0; interpT = 0; morphProgress = 0;
+        activeDescIdx = 0;
+        descOpacity = 1.0;
         disperseF = 0;
       } else if (p < 0.160) {
         fromIdx = 0; toIdx = 0; interpT = 0; morphProgress = 0;
         activeDescIdx = 0;
-        descOpacity = 1.0;
+        descOpacity = 1 - smoothstep(0.120, 0.160, p);
         disperseF = 0;
-      } else if (p < 0.230) {
-        fromIdx = 0; toIdx = 0; interpT = 0; morphProgress = 0;
-        activeDescIdx = 0;
-        descOpacity = 1 - smoothstep(0.160, 0.230, p);
-        disperseF = 0;
-      } else if (p < 0.300) {
-        const t = smoothstep(0.230, 0.300, p);
+      } else if (p < 0.235) {
+        const t = smoothstep(0.160, 0.235, p);
         fromIdx = 0; toIdx = 1; interpT = t;
         morphProgress = t;
         activeDescIdx = 0; descOpacity = 0; disperseF = 0;
-      } else if (p < 0.370) {
+      } else if (p < 0.300) {
         fromIdx = 1; toIdx = 1; interpT = 0; morphProgress = 0;
         activeDescIdx = 1;
-        descOpacity = smoothstep(0.300, 0.370, p);
+        descOpacity = smoothstep(0.235, 0.300, p);
         disperseF = 0;
-      } else if (p < 0.430) {
+      } else if (p < 0.325) {
         fromIdx = 1; toIdx = 1; interpT = 0; morphProgress = 0;
         activeDescIdx = 1;
         descOpacity = 1.0;
         disperseF = 0;
-      } else if (p < 0.500) {
+      } else if (p < 0.365) {
         fromIdx = 1; toIdx = 1; interpT = 0; morphProgress = 0;
         activeDescIdx = 1;
-        descOpacity = 1 - smoothstep(0.430, 0.500, p);
+        descOpacity = 1 - smoothstep(0.325, 0.365, p);
         disperseF = 0;
-      } else if (p < 0.570) {
-        const t = smoothstep(0.500, 0.570, p);
+      } else if (p < 0.440) {
+        const t = smoothstep(0.365, 0.440, p);
         fromIdx = 1; toIdx = 2; interpT = t;
         morphProgress = t;
         activeDescIdx = 1; descOpacity = 0; disperseF = 0;
-      } else if (p < 0.640) {
+      } else if (p < 0.505) {
         fromIdx = 2; toIdx = 2; interpT = 0; morphProgress = 0;
         activeDescIdx = 2;
-        descOpacity = smoothstep(0.570, 0.640, p);
+        descOpacity = smoothstep(0.440, 0.505, p);
         disperseF = 0;
-      } else if (p < 0.700) {
+      } else if (p < 0.530) {
         fromIdx = 2; toIdx = 2; interpT = 0; morphProgress = 0;
         activeDescIdx = 2;
         descOpacity = 1.0;
         disperseF = 0;
-      } else if (p < 0.770) {
+      } else if (p < 0.570) {
         fromIdx = 2; toIdx = 2; interpT = 0; morphProgress = 0;
         activeDescIdx = 2;
-        descOpacity = 1 - smoothstep(0.700, 0.770, p);
+        descOpacity = 1 - smoothstep(0.530, 0.570, p);
         disperseF = 0;
-      } else if (p < 0.840) {
-        const t = smoothstep(0.770, 0.840, p);
+      } else if (p < 0.645) {
+        const t = smoothstep(0.570, 0.645, p);
         fromIdx = 2; toIdx = 3; interpT = t;
         morphProgress = t;
         activeDescIdx = 2; descOpacity = 0; disperseF = 0;
-      } else if (p < 0.895) {
+      } else if (p < 0.710) {
         fromIdx = 3; toIdx = 3; interpT = 0; morphProgress = 0;
         activeDescIdx = 3;
-        descOpacity = smoothstep(0.840, 0.895, p);
+        descOpacity = smoothstep(0.645, 0.710, p);
         disperseF = 0;
-      } else if (p < 0.940) {
+      } else if (p < 0.735) {
         fromIdx = 3; toIdx = 3; interpT = 0; morphProgress = 0;
         activeDescIdx = 3;
         descOpacity = 1.0;
         disperseF = 0;
-      } else if (p < 0.975) {
+      } else if (p < 0.775) {
         fromIdx = 3; toIdx = 3; interpT = 0; morphProgress = 0;
         activeDescIdx = 3;
-        descOpacity = 1 - smoothstep(0.940, 0.975, p);
-        disperseF = smoothstep(0.950, 0.985, p);
+        descOpacity = 1 - smoothstep(0.735, 0.775, p);
+        disperseF = 0;
+      } else if (p < 0.810) {
+        fromIdx = 3; toIdx = 3; interpT = 0; morphProgress = 0;
+        activeDescIdx = 3;
+        descOpacity = 0;
+        disperseF = 0;
+      } else if (p < 0.885) {
+        fromIdx = 3; toIdx = 3; interpT = 0; morphProgress = 0;
+        activeDescIdx = 3;
+        descOpacity = 0;
+        disperseF = smoothstep(0.810, 0.885, p);
       } else {
         fromIdx = 3; toIdx = 3; interpT = 0; morphProgress = 0;
         activeDescIdx = 3;
@@ -1172,31 +1173,16 @@
       requestAnimationFrame(frame);
       try {
         time += 0.006;
-        const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-
-      if (Math.abs(touchMomentumY) > 0.5) {
-        targetScrollY = clamp(targetScrollY + touchMomentumY, 0, maxScroll);
-        touchMomentumY *= 0.92;
-      } else {
-        touchMomentumY = 0;
-      }
-
       if (IS_MOBILE) {
-        if (Math.abs(window.scrollY - smoothedScrollY) > 2) {
-          targetScrollY = window.scrollY;
-          smoothedScrollY = window.scrollY;
-        } else {
-          const scrollDamping = 0.32;
-          smoothedScrollY += (targetScrollY - smoothedScrollY) * scrollDamping;
-          if (Math.abs(window.scrollY - smoothedScrollY) > 1) {
-            window.scrollTo(0, Math.round(smoothedScrollY));
-          }
-        }
+        targetScrollY = window.scrollY;
+        smoothedScrollY = window.scrollY;
       } else {
         const scrollDamping = 0.09;
         smoothedScrollY += (targetScrollY - smoothedScrollY) * scrollDamping;
         window.scrollTo(0, Math.round(smoothedScrollY));
       }
+
+      const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
       let normProgress = clamp(smoothedScrollY / maxScroll, 0, 1);
       if (urlParams.has('contact')) {
         normProgress = 1.0;
