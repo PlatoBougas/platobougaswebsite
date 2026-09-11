@@ -75,8 +75,9 @@
       top: 0;
       left: 0;
       width: 100vw;
+      width: 100%;
       height: 100vh;
-      height: 100dvh;
+      height: 100%;
       display: block;
       z-index: 0;
       pointer-events: none;
@@ -90,6 +91,8 @@
 
     .desc-overlay {
       position: fixed;
+      left: 50%;
+      top: calc(50% + 48px);
       transform: translate(-50%, -50%);
       text-align: center;
       pointer-events: none;
@@ -100,6 +103,10 @@
       max-width: 640px;
       will-change: opacity, transform;
       transition: opacity 0.4s ease;
+    }
+
+    #ov1 {
+      top: calc(50% + 70px);
     }
 
     .desc-overlay .cap {
@@ -120,6 +127,14 @@
     }
 
     @media (min-width: 640px) {
+      .desc-overlay {
+        top: calc(50% + 70px);
+      }
+
+      #ov1 {
+        top: calc(50% + 102px);
+      }
+
       .desc-overlay .cap {
         font-size: 24px;
         margin-bottom: 8px;
@@ -198,29 +213,6 @@
       }
     }
 
-    /* Minimalist Apple-style Scrub Indicator */
-    #scrub-track {
-      position: fixed;
-      right: 1.25rem;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 2px;
-      height: 120px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 9999px;
-      z-index: 30;
-      pointer-events: none;
-      opacity: 0.5;
-      transition: opacity 0.3s ease;
-    }
-
-    #scrub-bar {
-      width: 100%;
-      height: 0%;
-      background: #fff;
-      border-radius: 9999px;
-      box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
-    }
   </style>
 </head>
 
@@ -257,10 +249,6 @@
   </div>
 
   <div id="hint">scroll</div>
-
-  <div id="scrub-track">
-    <div id="scrub-bar"></div>
-  </div>
 
   <script>
     /* ==========================================================================
@@ -305,7 +293,6 @@
     const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 640;
 
     function getViewportSize() {
-      if (window.visualViewport) return { w: window.visualViewport.width, h: window.visualViewport.height };
       return { w: window.innerWidth, h: window.innerHeight };
     }
 
@@ -680,8 +667,8 @@
       const overlayEls = document.querySelectorAll('.desc-overlay');
       overlayEls.forEach((el, i) => {
         const offset = (i === 1) ? (DESC_OFFSET + googleExtraOffset) : DESC_OFFSET;
-        el.style.left = (W / 2) + 'px';
-        el.style.top = (H / 2 + offset) + 'px';
+        el.style.left = '50%';
+        el.style.top = `calc(50% + ${offset}px)`;
       });
 
       // Pixel-perfect alignment calibration:
@@ -1178,7 +1165,6 @@
     }
 
     const hint = document.getElementById('hint');
-    const scrubBar = document.getElementById('scrub-bar');
     const contactZone = document.querySelector('.contact-zone');
     const overlays = [0, 1, 2, 3].map(i => document.getElementById('ov' + i));
 
@@ -1207,7 +1193,6 @@
         smoothedScrollY = normProgress * maxScroll;
         targetScrollY = smoothedScrollY;
       }
-      if (scrubBar) scrubBar.style.height = (normProgress * 100) + '%';
 
       const state = getGlobalTimeline(normProgress);
 
@@ -1694,10 +1679,10 @@
     function onResize() {
       const vp = getViewportSize();
       const widthChanged = Math.abs(vp.w - lastW) > 6;
-      const heightChangedSignificantly = Math.abs(vp.h - lastH) > 220;
+      const heightChangedSignificantly = Math.abs(vp.h - lastH) > 180;
 
-      // On mobile / in-app browsers, address bar collapsing causes small height fluctuations:
-      // Update canvas projection dimensions without destroying and re-initializing particle pools!
+      // On mobile / in-app browsers, address bar collapse/expansion causes small vertical height changes (~50-90px).
+      // Update canvas viewport dimensions smoothly without re-initializing particle pools!
       if (IS_MOBILE && !widthChanged && !heightChangedSignificantly) {
         W = vp.w;
         H = vp.h;
@@ -1715,9 +1700,6 @@
     }
 
     window.addEventListener('resize', onResize, { passive: true });
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', onResize, { passive: true });
-    }
 
     document.fonts.ready.then(() => {
       buildAllTargets();
